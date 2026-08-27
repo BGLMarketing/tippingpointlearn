@@ -28,14 +28,27 @@ becomes painful to maintain.
 - **Analytics**: Google tag (gtag.js) and Google Tag Manager are both installed
   on every page, in `<head>`.
 
-## Learn page — current status
+## Learn page & admin
 
-`/learn` is a placeholder. The real feature (admin can create articles and set
-their visibility to draft / published / unpublished) needs a decision on
-architecture before it's built — a static site alone can't safely support
-in-browser content editing, since any credential that lets someone publish
-content would be exposed to every visitor if it lived in the page itself.
-See the conversation this repo came from for the options under discussion.
+`/learn` lists published articles, pulled live from a Supabase database.
+`/admin` is a password-protected dashboard (Supabase Auth) where a signed-in
+admin can create, edit, and delete articles, and set each one's status to
+`draft`, `published`, or `unpublished`. Only `published` articles are visible
+on `/learn` or `/learn/article.html` — enforced by Postgres Row Level Security
+on the `articles` table, not just by the frontend hiding them.
+
+- **Config**: `assets/js/supabase-config.js` holds the Supabase project URL
+  and anon/public key. The anon key is meant to be public-facing; real access
+  control lives in the database's RLS policies, not in keeping this key
+  secret.
+- **Content format**: articles are written in Markdown in the admin's content
+  field, rendered client-side via `marked.js` on `/learn/article.html`.
+- **Adding an admin user**: create them directly in the Supabase dashboard
+  under Authentication → Users — there's no self-serve signup on `/admin`.
+- **Database schema**: see the `articles` table definition and RLS policies
+  used to set this up (title, slug, excerpt, content, status, timestamps).
+  If the project is ever rebuilt, re-run that same SQL against a fresh
+  Supabase project and update `supabase-config.js` with its new URL/key.
 
 ## Deploying
 
