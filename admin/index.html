@@ -19,7 +19,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tipping Point — Learn</title>
+<title>Tipping Point — Admin</title>
 
 <!-- Brevo form dependencies (required by their submission script) -->
 <style>
@@ -507,74 +507,79 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 </style>
 
 <style>
-  .learn-hero{
-    background:
-      radial-gradient(1100px 460px at 84% -12%, rgba(226,160,64,0.16), transparent 60%),
-      var(--paper);
-    padding:64px 0 20px;
-    text-align:center;
-  }
-  .learn-hero .eyebrow{ justify-content:center; display:flex; margin-bottom:16px; }
-  .learn-hero h1{ font-size:clamp(30px,4vw,44px); letter-spacing:-0.015em; margin-bottom:14px; }
-  .learn-hero p{ font-size:16px; line-height:1.6; color:rgba(22,36,26,0.7); max-width:50ch; margin:0 auto; }
+  .admin-wrap{ max-width:880px; margin:0 auto; padding:56px 32px 100px; }
+  .admin-head{ margin-bottom:36px; }
+  .admin-head .eyebrow{ margin-bottom:12px; }
+  .admin-head h1{ font-size:clamp(26px,3.4vw,36px); letter-spacing:-0.01em; }
 
-  .article-grid{
-    display:grid;
-    grid-template-columns:repeat(3, 1fr);
-    gap:24px;
-    max-width:1080px;
-    margin:0 auto;
-    padding:0 32px 90px;
+  .login-card{
+    max-width:400px; margin:60px auto;
+    background:var(--paper); border:1px solid var(--line-dark);
+    border-radius:18px; padding:36px 32px;
   }
-  .article-card{
-    display:block;
-    text-decoration:none;
-    color:var(--ink);
-    background:var(--paper);
-    border:1px solid var(--line-dark);
-    border-radius:16px;
-    padding:26px 24px;
-    transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
-  }
-  .article-card:hover{
-    transform:translateY(-3px);
-    border-color:var(--green);
-    box-shadow:0 14px 30px rgba(15,25,18,0.08);
-  }
-  .article-card .date{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:11px;
-    letter-spacing:0.05em;
-    text-transform:uppercase;
-    color:rgba(22,36,26,0.45);
-    display:block;
-    margin-bottom:12px;
-  }
-  .article-card h3{ font-size:18px; margin-bottom:10px; line-height:1.3; }
-  .article-card p{ font-size:14px; line-height:1.6; color:rgba(22,36,26,0.68); }
+  .login-card h2{ font-size:20px; margin-bottom:8px; }
+  .login-card p.sub{ font-size:14px; color:rgba(22,36,26,0.65); margin-bottom:24px; }
 
-  .learn-empty{
-    max-width:520px; margin:16px auto 90px;
-    text-align:center;
-    background:var(--paper-dim);
-    border:1px solid var(--line-dark);
-    border-radius:18px;
-    padding:44px 32px;
+  .field{ margin-bottom:16px; text-align:left; }
+  .field label{
+    display:block; font-family:'IBM Plex Mono', monospace; font-size:11px;
+    letter-spacing:0.06em; text-transform:uppercase; color:rgba(22,36,26,0.55);
+    margin-bottom:6px;
   }
-  .learn-empty .ico{
-    width:52px; height:52px; border-radius:50%;
-    background:var(--green-deep); color:var(--gold-soft);
-    display:flex; align-items:center; justify-content:center;
-    margin:0 auto 18px; font-size:22px;
+  .field input, .field textarea, .field select{
+    width:100%; font-family:'Inter', sans-serif; font-size:15px;
+    padding:12px 14px; border-radius:10px; border:1px solid var(--line-dark);
+    background:#fff; color:var(--ink); outline:none;
+    transition:border-color .15s ease, box-shadow .15s ease;
   }
-  .learn-empty h2{ font-size:19px; margin-bottom:10px; }
-  .learn-empty p{ font-size:14.5px; line-height:1.6; color:rgba(22,36,26,0.65); }
+  .field input:focus, .field textarea:focus, .field select:focus{
+    border-color:var(--green); box-shadow:0 0 0 3px rgba(51,153,102,0.15);
+  }
+  .field textarea{ resize:vertical; min-height:220px; font-family:'IBM Plex Mono', monospace; font-size:13.5px; line-height:1.6; }
+  .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 
-  @media (max-width:860px){
-    .article-grid{ grid-template-columns:1fr 1fr; }
+  .admin-topbar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .admin-topbar .user-email{ font-family:'IBM Plex Mono', monospace; font-size:12.5px; color:rgba(22,36,26,0.5); }
+
+  .form-card{
+    background:var(--paper-dim); border:1px solid var(--line-dark);
+    border-radius:16px; padding:28px 26px; margin:28px 0 40px;
   }
+  .form-card h3{ font-size:17px; margin-bottom:20px; }
+  .form-actions{ display:flex; gap:10px; margin-top:6px; }
+  .form-status{ font-size:13px; margin-top:12px; }
+  .form-status.error{ color:#b3452f; }
+  .form-status.success{ color:var(--green-deep); font-weight:600; }
+
+  .article-table{ width:100%; border-collapse:collapse; }
+  .article-table th{
+    text-align:left; font-family:'IBM Plex Mono', monospace; font-size:11px;
+    letter-spacing:0.05em; text-transform:uppercase; color:rgba(22,36,26,0.5);
+    padding:10px 12px; border-bottom:1px solid var(--line-dark);
+  }
+  .article-table td{
+    padding:14px 12px; border-bottom:1px solid var(--line-dark);
+    font-size:14.5px; vertical-align:middle;
+  }
+  .status-pill{
+    display:inline-block; padding:3px 11px; border-radius:100px;
+    font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.03em;
+  }
+  .status-draft{ background:var(--paper-dim); border:1px solid var(--line-dark); color:rgba(22,36,26,0.6); }
+  .status-published{ background:rgba(51,153,102,0.14); color:var(--green-deep); }
+  .status-unpublished{ background:rgba(226,160,64,0.16); color:#8a5c1e; }
+  .table-actions{ display:flex; gap:8px; }
+  .link-btn{
+    background:none; border:none; cursor:pointer;
+    font-family:'Inter', sans-serif; font-size:13px; font-weight:600;
+    color:var(--green-deep); padding:4px 0;
+  }
+  .link-btn.danger{ color:#b3452f; }
+  .empty-row td{ text-align:center; color:rgba(22,36,26,0.5); padding:32px 12px; }
+
   @media (max-width:600px){
-    .article-grid{ grid-template-columns:1fr; padding:0 20px 60px; }
+    .field-row{ grid-template-columns:1fr; }
+    .article-table{ display:block; overflow-x:auto; white-space:nowrap; }
   }
 </style>
 
@@ -622,208 +627,91 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     </div>
   </div>
 </nav>
-<header class="learn-hero">
-  <div class="container">
-    <div class="eyebrow">Learn</div>
-    <h1>Investing, explained plainly.</h1>
-    <p>Articles, guides, and explainers to help you understand the market before you put a single naira into it.</p>
+<div class="admin-wrap">
+
+  <div id="login-view">
+    <div class="login-card">
+      <h2>Admin login</h2>
+      <p class="sub">Sign in to manage Learn articles.</p>
+      <form id="login-form">
+        <div class="field">
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" required autocomplete="username">
+        </div>
+        <div class="field">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%; padding:13px;">Sign in</button>
+        <div class="form-status" id="login-status"></div>
+      </form>
+    </div>
   </div>
-</header>
 
-<div id="articles-grid" class="article-grid"></div>
-
-<div id="articles-empty" class="learn-empty" hidden>
-  <div class="ico">&#9998;</div>
-  <h2>Articles are coming soon</h2>
-  <p>We're just getting started here. Check back soon, or join the waitlist to be notified when new content goes live.</p>
-</div>
-<!-- ===== Waitlist Modal ===== -->
-<style>
-  /* Reskin Brevo's real form to match Tipping Point's brand.
-     Brevo's own submission script (main.js) drives this form —
-     we only override appearance, never the field ids/names/structure
-     it depends on. */
-  #sib-form-container{ text-align:left; }
-  .sib-form{ background:transparent !important; text-align:left !important; }
-  #sib-container{
-    max-width:100% !important;
-    background:transparent !important;
-    border:none !important;
-    border-radius:0 !important;
-    text-align:left !important;
-  }
-  .brevo-intro-hide{ display:none !important; }
-  .entry__label{
-    font-family:'IBM Plex Mono', monospace !important;
-    font-size:11px !important;
-    letter-spacing:0.06em !important;
-    text-transform:uppercase !important;
-    color:rgba(22,36,26,0.55) !important;
-    font-weight:500 !important;
-    margin-bottom:6px !important;
-  }
-  .sib-input .input{
-    font-family:'Inter', sans-serif !important;
-    font-size:16px !important;
-    padding:12px 14px !important;
-    border-radius:10px !important;
-    border:1px solid var(--line-dark) !important;
-    background:#fff !important;
-    color:var(--ink) !important;
-  }
-  .sib-input .input:focus{
-    border-color:var(--green) !important;
-    box-shadow:0 0 0 3px rgba(51,153,102,0.15) !important;
-    outline:none !important;
-  }
-  .entry__error{ font-size:12px !important; padding:6px 10px !important; margin-top:4px !important; }
-  .sib-form-block__button{
-    font-family:'Inter', sans-serif !important;
-    font-weight:600 !important;
-    font-size:15px !important;
-    width:100% !important;
-    padding:15px !important;
-    border-radius:100px !important;
-    background:var(--green-deep) !important;
-    color:var(--paper) !important;
-    text-align:center !important;
-    justify-content:center !important;
-    cursor:pointer;
-    transition:background .18s ease, transform .18s ease;
-  }
-  .sib-form-block__button:hover{ background:var(--green-mid) !important; transform:translateY(-2px); }
-  .sib-form-block[style*="text-align: right"]{ text-align:center !important; }
-  #error-message, #success-message{
-    font-family:'Inter', sans-serif !important;
-    border-radius:12px !important;
-    max-width:100% !important;
-    margin-bottom:16px;
-  }
-  #sib-form input[type="text"].input--hidden{ position:absolute; left:-9999px; width:1px; height:1px; }
-</style>
-
-<div class="modal-overlay" id="waitlistOverlay" onclick="if(event.target===this) closeWaitlist()">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="waitlistTitle">
-    <button class="modal-close" onclick="closeWaitlist()" aria-label="Close">✕</button>
-
-    <div class="eyebrow">Early access</div>
-    <h3 id="waitlistTitle">Join the waitlist</h3>
-    <p class="sub">Tell us a little about you and we'll reach out the moment Tipping Point opens.</p>
-
-    <!-- Begin Brevo Form (real markup + submission logic, unmodified) -->
-    <div class="sib-form">
-      <div id="sib-form-container" class="sib-form-container">
-        <div id="error-message" class="sib-form-message-panel" style="font-family:Helvetica, sans-serif; font-size:14px; text-align:left; color:#661d1d; background-color:#ffeded; border-color:#ff4949;">
-          <div class="sib-form-message-panel__text sib-form-message-panel__text--center">
-            <svg viewBox="0 0 512 512" class="sib-icon sib-notification__icon"><path d="M256 40c118.621 0 216 96.075 216 216 0 119.291-96.61 216-216 216-119.244 0-216-96.562-216-216 0-119.203 96.602-216 216-216m0-32C119.043 8 8 119.083 8 256c0 136.997 111.043 248 248 248s248-111.003 248-248C504 119.083 392.957 8 256 8zm-11.49 120h22.979c6.823 0 12.274 5.682 11.99 12.5l-7 168c-.268 6.428-5.556 11.5-11.99 11.5h-8.979c-6.433 0-11.722-5.073-11.99-11.5l-7-168c-.283-6.818 5.167-12.5 11.99-12.5zM256 340c-15.464 0-28 12.536-28 28s12.536 28 28 28 28-12.536 28-28-12.536-28-28-28z"/></svg>
-            <span class="sib-form-message-panel__inner-text">Your interest could not be saved. Please try again</span>
-          </div>
-        </div>
-        <div id="success-message" class="sib-form-message-panel" style="font-family:Helvetica, sans-serif; font-size:14px; text-align:left; color:#085229; background-color:#e7faf0; border-color:#13ce66;">
-          <div class="sib-form-message-panel__text sib-form-message-panel__text--center">
-            <svg viewBox="0 0 512 512" class="sib-icon sib-notification__icon"><path d="M256 8C119.033 8 8 119.033 8 256s111.033 248 248 248 248-111.033 248-248S392.967 8 256 8zm0 464c-118.664 0-216-96.055-216-216 0-118.663 96.055-216 216-216 118.664 0 216 96.055 216 216 0 118.663-96.055 216-216 216zm141.63-274.961L217.15 376.071c-4.705 4.667-12.303 4.637-16.97-.068l-85.878-86.572c-4.667-4.705-4.637-12.303.068-16.97l8.52-8.451c4.705-4.667 12.303-4.637 16.97.068l68.976 69.533 163.441-162.13c4.705-4.667 12.303-4.637 16.97.068l8.451 8.52c4.668 4.705 4.637 12.303-.068 16.97z"/></svg>
-            <span class="sib-form-message-panel__inner-text">Thank you for joining The Tipping Point Waitlist! We'll be in touch soon.</span>
-          </div>
-        </div>
-        <div id="sib-container" class="sib-container--large sib-container--vertical">
-          <form id="sib-form" method="POST" action="https://a2535d87.sibforms.com/serve/MUIFAAaYCyXu6n4Fak1K1ILDvYh_Ld7gKLnnda_U2jBRwQBOUnBcc7SR-4aHV0aeut-2fd-A8VRb8g_J6dD10xS9dhe9dqv2hgo5pTu9F1k4kFV8j90MbznK32iOhuRX01GaZmhbKkRPhUknpHItulpYNU2o7dm1p2oworzv91Ykq_lI6bJ72mnpN0Eu4QC0EVdA7M-rLMY1Ynr7JA==" data-type="subscription">
-
-            <div class="sib-form-block brevo-intro-hide" style="font-family:Baskerville, serif; font-size:32px; font-weight:700; text-align:left;"><p>JOIN THE COMMUNITY</p></div>
-            <div class="sib-form-block brevo-intro-hide" style="font-family:Helvetica, sans-serif; font-size:16px; text-align:left;"><div class="sib-text-form-block"><p>Reach Your Financial Tipping Point With Us!</p></div></div>
-
-            <div style="padding: 8px 0;">
-              <div class="sib-input sib-form-block">
-                <div class="form__entry entry_block">
-                  <div class="form__label-row">
-                    <label class="entry__label" for="FIRSTNAME" data-required="*">NAME</label>
-                    <div class="entry__field">
-                      <input class="input" maxlength="200" type="text" id="FIRSTNAME" name="FIRSTNAME" autocomplete="off" placeholder="Tell us your name" data-required="true" required />
-                    </div>
-                  </div>
-                  <label class="entry__error entry__error--primary"></label>
-                </div>
-              </div>
-            </div>
-
-            <div style="padding: 8px 0;">
-              <div class="sib-input sib-form-block">
-                <div class="form__entry entry_block">
-                  <div class="form__label-row">
-                    <label class="entry__label" for="EMAIL" data-required="*">EMAIL ADDRESS</label>
-                    <div class="entry__field">
-                      <input class="input" type="text" id="EMAIL" name="EMAIL" autocomplete="off" value="" placeholder="Email address" data-required="true" required />
-                    </div>
-                  </div>
-                  <label class="entry__error entry__error--primary"></label>
-                </div>
-              </div>
-            </div>
-
-            <div style="padding: 8px 0;">
-              <div class="sib-input sib-form-block">
-                <div class="form__entry entry_block">
-                  <div class="form__label-row">
-                    <label class="entry__label" for="PHONENUMBER" data-required="*">PHONE NUMBER</label>
-                    <div class="entry__field">
-                      <input maxlength="200" type="text" data-numeric="true" class="input" id="PHONENUMBER" name="PHONENUMBER" autocomplete="off" placeholder="Phone number" data-required="true" required />
-                    </div>
-                  </div>
-                  <label class="entry__error entry__error--primary"></label>
-                </div>
-              </div>
-            </div>
-
-            <div style="padding: 8px 0; text-align:right">
-              <div class="sib-form-block" style="text-align: right">
-                <button class="sib-form-block__button sib-form-block__button-with-loader" form="sib-form" type="submit">
-                  <svg class="icon clickable__icon progress-indicator__icon sib-hide-loader-icon" viewBox="0 0 512 512"><path d="M460.116 373.846l-20.823-12.022c-5.541-3.199-7.54-10.159-4.663-15.874 30.137-59.886 28.343-131.652-5.386-189.946-33.641-58.394-94.896-95.833-161.827-99.676C261.028 55.961 256 50.751 256 44.352V20.309c0-6.904 5.808-12.337 12.703-11.982 83.556 4.306 160.163 50.864 202.11 123.677 42.063 72.696 44.079 162.316 6.031 236.832-3.14 6.148-10.75 8.461-16.728 5.01z"/></svg>
-                  Join Waitlist
-                </button>
-              </div>
-            </div>
-
-            <input type="text" name="email_address_check" value="" class="input--hidden">
-            <input type="hidden" name="locale" value="en">
-          </form>
-        </div>
+  <div id="dashboard-view" hidden>
+    <div class="admin-topbar">
+      <div class="admin-head">
+        <div class="eyebrow">Learn admin</div>
+        <h1>Manage articles</h1>
+      </div>
+      <div style="text-align:right;">
+        <div class="user-email" id="user-email"></div>
+        <button class="link-btn" id="logout-btn" style="margin-top:6px;">Sign out</button>
       </div>
     </div>
-    <!-- End Brevo Form -->
+
+    <button class="btn btn-primary" id="new-article-btn">+ New article</button>
+
+    <div class="form-card" id="form-card" hidden>
+      <h3 id="form-heading">New article</h3>
+      <form id="article-form">
+        <input type="hidden" id="article-id">
+        <div class="field">
+          <label for="article-title">Title</label>
+          <input type="text" id="article-title" required>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="article-slug">Slug (URL)</label>
+            <input type="text" id="article-slug" required>
+          </div>
+          <div class="field">
+            <label for="article-status">Status</label>
+            <select id="article-status">
+              <option value="draft">Draft</option>
+              <option value="published">Published</option>
+              <option value="unpublished">Unpublished</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="article-excerpt">Excerpt (shown on the Learn page)</label>
+          <input type="text" id="article-excerpt">
+        </div>
+        <div class="field">
+          <label for="article-content">Content (Markdown supported)</label>
+          <textarea id="article-content" required></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Save article</button>
+          <button type="button" class="btn btn-ghost" id="cancel-form-btn">Cancel</button>
+        </div>
+        <div class="form-status" id="article-form-status"></div>
+      </form>
+    </div>
+
+    <table class="article-table">
+      <thead>
+        <tr><th>Title</th><th>Status</th><th>Updated</th><th></th></tr>
+      </thead>
+      <tbody id="article-table-body">
+        <tr class="empty-row"><td colspan="4">Loading…</td></tr>
+      </tbody>
+    </table>
   </div>
+
 </div>
-
-<script>
-<script>
-  // ---------- Scroll reveal ----------
-  const revealEls = document.querySelectorAll('.reveal');
-  const io = new IntersectionObserver((entries) => {
-    entries.forEach(e => {
-      if(e.isIntersecting){
-        e.target.classList.add('in');
-        io.unobserve(e.target);
-      }
-    });
-  }, {threshold: 0.15});
-  revealEls.forEach(el => io.observe(el));
-
-  // ---------- Waitlist modal ----------
-  // Brevo's own script (main.js, loaded below) owns the form's actual
-  // submission logic, validation, and success/error panel toggling.
-  // We only control opening and closing the modal around it.
-  const overlay = document.getElementById('waitlistOverlay');
-
-  function openWaitlist(){
-    overlay.classList.add('open');
-    document.body.style.overflow = 'hidden';
-  }
-  function closeWaitlist(){
-    overlay.classList.remove('open');
-    document.body.style.overflow = '';
-  }
-  document.addEventListener('keydown', (e) => {
-    if(e.key === 'Escape') closeWaitlist();
-  });
-</script><footer id="waitlist">
+<footer id="waitlist">
   <div class="container">
     <div class="foot-top">
       <div>
@@ -890,6 +778,99 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <script>
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+  const loginView = document.getElementById('login-view');
+  const dashboardView = document.getElementById('dashboard-view');
+  const loginForm = document.getElementById('login-form');
+  const loginStatus = document.getElementById('login-status');
+  const userEmailEl = document.getElementById('user-email');
+  const formCard = document.getElementById('form-card');
+  const articleForm = document.getElementById('article-form');
+  const formHeading = document.getElementById('form-heading');
+  const formStatus = document.getElementById('article-form-status');
+  const tableBody = document.getElementById('article-table-body');
+
+  function slugify(str){
+    return str.toLowerCase().trim()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-');
+  }
+
+  document.getElementById('article-title').addEventListener('input', (e) => {
+    if(!document.getElementById('article-id').value){
+      document.getElementById('article-slug').value = slugify(e.target.value);
+    }
+  });
+
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    loginStatus.textContent = '';
+    loginStatus.className = 'form-status';
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if(error){
+      loginStatus.textContent = error.message;
+      loginStatus.className = 'form-status error';
+    }
+  });
+
+  document.getElementById('logout-btn').addEventListener('click', async () => {
+    await sb.auth.signOut();
+  });
+
+  document.getElementById('new-article-btn').addEventListener('click', () => {
+    resetForm();
+    formHeading.textContent = 'New article';
+    formCard.hidden = false;
+  });
+
+  document.getElementById('cancel-form-btn').addEventListener('click', () => {
+    formCard.hidden = true;
+    resetForm();
+  });
+
+  function resetForm(){
+    document.getElementById('article-id').value = '';
+    articleForm.reset();
+    formStatus.textContent = '';
+    formStatus.className = 'form-status';
+  }
+
+  articleForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    formStatus.textContent = '';
+    formStatus.className = 'form-status';
+
+    const id = document.getElementById('article-id').value;
+    const payload = {
+      title: document.getElementById('article-title').value.trim(),
+      slug: document.getElementById('article-slug').value.trim(),
+      excerpt: document.getElementById('article-excerpt').value.trim(),
+      content: document.getElementById('article-content').value,
+      status: document.getElementById('article-status').value,
+      updated_at: new Date().toISOString()
+    };
+
+    let error;
+    if(id){
+      ({ error } = await sb.from('articles').update(payload).eq('id', id));
+    } else {
+      ({ error } = await sb.from('articles').insert(payload));
+    }
+
+    if(error){
+      formStatus.textContent = error.message;
+      formStatus.className = 'form-status error';
+      return;
+    }
+
+    formStatus.textContent = 'Saved.';
+    formStatus.className = 'form-status success';
+    await loadArticles();
+    setTimeout(() => { formCard.hidden = true; resetForm(); }, 700);
+  });
+
   function escapeHtml(str){
     const div = document.createElement('div');
     div.textContent = str;
@@ -899,35 +880,68 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   async function loadArticles(){
     const { data, error } = await sb
       .from('articles')
-      .select('title, slug, excerpt, created_at')
-      .eq('status', 'published')
-      .order('created_at', { ascending: false });
-
-    const grid = document.getElementById('articles-grid');
-    const empty = document.getElementById('articles-empty');
+      .select('*')
+      .order('updated_at', { ascending: false });
 
     if(error){
-      console.error('Error loading articles:', error);
-      empty.hidden = false;
+      tableBody.innerHTML = `<tr class="empty-row"><td colspan="4">Error loading articles: ${escapeHtml(error.message)}</td></tr>`;
       return;
     }
 
     if(!data || data.length === 0){
-      empty.hidden = false;
+      tableBody.innerHTML = '<tr class="empty-row"><td colspan="4">No articles yet — create your first one above.</td></tr>';
       return;
     }
 
-    grid.innerHTML = data.map(a => {
-      const date = new Date(a.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-      return `<a class="article-card" href="/learn/article.html?slug=${encodeURIComponent(a.slug)}">
-        <span class="date">${date}</span>
-        <h3>${escapeHtml(a.title)}</h3>
-        <p>${escapeHtml(a.excerpt || '')}</p>
-      </a>`;
+    tableBody.innerHTML = data.map(a => {
+      const updated = new Date(a.updated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      return `<tr>
+        <td>${escapeHtml(a.title)}</td>
+        <td><span class="status-pill status-${a.status}">${a.status}</span></td>
+        <td>${updated}</td>
+        <td class="table-actions">
+          <button class="link-btn" onclick="editArticle('${a.id}')">Edit</button>
+          <button class="link-btn danger" onclick="deleteArticle('${a.id}')">Delete</button>
+        </td>
+      </tr>`;
     }).join('');
   }
 
-  loadArticles();
+  window.editArticle = async function(id){
+    const { data, error } = await sb.from('articles').select('*').eq('id', id).single();
+    if(error || !data) return;
+    document.getElementById('article-id').value = data.id;
+    document.getElementById('article-title').value = data.title;
+    document.getElementById('article-slug').value = data.slug;
+    document.getElementById('article-excerpt').value = data.excerpt || '';
+    document.getElementById('article-content').value = data.content;
+    document.getElementById('article-status').value = data.status;
+    formHeading.textContent = 'Edit article';
+    formCard.hidden = false;
+    window.scrollTo({ top: formCard.offsetTop - 20, behavior: 'smooth' });
+  };
+
+  window.deleteArticle = async function(id){
+    if(!confirm('Delete this article? This cannot be undone.')) return;
+    const { error } = await sb.from('articles').delete().eq('id', id);
+    if(!error) await loadArticles();
+  };
+
+  async function checkAuth(){
+    const { data: { session } } = await sb.auth.getSession();
+    if(session){
+      loginView.hidden = true;
+      dashboardView.hidden = false;
+      userEmailEl.textContent = session.user.email;
+      await loadArticles();
+    } else {
+      loginView.hidden = false;
+      dashboardView.hidden = true;
+    }
+  }
+
+  sb.auth.onAuthStateChange((_event, _session) => { checkAuth(); });
+  checkAuth();
 </script>
 
 
