@@ -43,6 +43,12 @@ on the `articles` table, not just by the frontend hiding them.
   secret.
 - **Content format**: articles are written in Markdown in the admin's content
   field, rendered client-side via `marked.js` on `/learn/article.html`.
+- **Clean article URLs**: `/learn/<slug>` (e.g. `/learn/what-is-an-ipo`) is
+  served via the rewrite rule in `_redirects` at the repo root, which points
+  it at `/learn/article.html` while keeping the clean URL in the address bar.
+  The page reads the slug from the URL path itself. This only works once
+  Netlify picks up the `_redirects` file, which it does automatically as
+  long as it's in the published root.
 - **Adding an admin user**: create them directly in the Supabase dashboard
   under Authentication → Users — there's no self-serve signup on `/admin`.
 - **Database schema**: see the `articles` table definition and RLS policies

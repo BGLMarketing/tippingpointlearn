@@ -864,8 +864,19 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   async function loadArticle(){
-    const params = new URLSearchParams(window.location.search);
-    const slug = params.get('slug');
+    // Netlify rewrites /learn/:slug to this page (see /_redirects) while
+    // keeping the clean URL in the address bar — so the slug normally
+    // comes from the path itself. The ?slug= query string is kept as a
+    // fallback for any old links still using that format directly.
+    const pathParts = window.location.pathname.split('/').filter(Boolean);
+    let slug = null;
+    if(pathParts.length >= 2 && pathParts[0] === 'learn' && pathParts[1] !== 'article.html'){
+      slug = pathParts[pathParts.length - 1];
+    }
+    if(!slug){
+      const params = new URLSearchParams(window.location.search);
+      slug = params.get('slug');
+    }
     const missing = document.getElementById('article-missing');
 
     if(!slug){

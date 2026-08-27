@@ -921,7 +921,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
     grid.innerHTML = data.map(a => {
       const date = new Date(a.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-      return `<a class="article-card" href="/learn/article.html?slug=${encodeURIComponent(a.slug)}">
+      return `<a class="article-card" href="/learn/${encodeURIComponent(a.slug)}">
         <span class="date">${date}</span>
         <h3>${escapeHtml(a.title)}</h3>
         <p>${escapeHtml(a.excerpt || '')}</p>

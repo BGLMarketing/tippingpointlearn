@@ -1,0 +1,5 @@
+# Serve the article template for clean article URLs, e.g.
+# /learn/what-does-financial-freedom-actually-mean
+# while keeping /learn/article.html available directly for any
+# existing links that use the old ?slug= query string format.
+/learn/:slug  /learn/article.html  200
