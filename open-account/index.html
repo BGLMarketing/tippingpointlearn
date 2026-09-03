@@ -410,8 +410,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <a href="/" class="nav-link">Home</a>
       <a href="/faq" class="nav-link">FAQ</a>
       <a href="/learn" class="nav-link">Learn</a>
-      <a href="/dangote-ipo" class="nav-link" style="color:var(--gold); font-weight:700;">Dangote IPO</a>
-      <span class="nav-link" style="color:var(--gold); font-weight:700; opacity:1; cursor:default;">Open an Account</span>
+      <a href="/dangote-ipo" class="nav-link">Dangote IPO</a>
+      <span class="nav-link" style="color:var(--gold); font-weight:700; opacity:1; cursor:default;">Open BGL Account</span>
       <a href="https://whatsapp.com/channel/0029VbDBs7b2P59tpMSe8D2L" target="_blank" rel="noopener" class="btn btn-ghost">Join the community</a>
       <button class="btn btn-primary" onclick="openWaitlist()">Join the waitlist</button>
     </div>
@@ -886,10 +886,8 @@ function bankingStepHtml(){
     <legend>Bank details</legend>
     <div class="aow-grid">
       ${textField('banking','bankName','Bank name',true)}
-      ${textField('banking','bankBranch','Bank branch',true)}
       ${textField('banking','accountName','Account name',true)}
       ${textField('banking','accountNumber','Account number',true)}
-      ${dateField('banking','dateOpened','Date account was opened',true)}
       ${selectField('banking','sourceOfFunds','Source of funds',['Salary','Business income','Investments','Inheritance','Other'],true)}
       <div class="field">
         <label>Account type<span class="req">*</span></label>
