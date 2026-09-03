@@ -1,40 +1,40 @@
 const { supabase } = require('./utils/supabaseClient');
-const { parseMultipart } = require('./utils/multipart');
 const {
   sendInternalNewSubmissionAlert,
   sendApplicantConfirmationEmail
 } = require('./utils/brevo');
 
-const STORAGE_BUCKET = 'application-documents';
+// Documents are uploaded DIRECTLY from the browser to Supabase Storage
+// beforehand (see create-upload-url.js), so this function only ever
+// receives small JSON — accountType, form data, and a list of
+// {person, docKey, path, fileName, fileType, fileSize} for documents
+// that are already sitting in storage. There's no multipart parsing
+// and no file bytes passing through this function at all, which is
+// also why it's fast and comfortably inside Netlify's function limits.
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return jsonResponse(405, { error: 'Method not allowed' });
   }
 
-  let fields, files;
+  let body;
   try {
-    ({ fields, files } = await parseMultipart(event));
+    body = JSON.parse(event.body || '{}');
   } catch (err) {
-    console.error('Multipart parse error:', err);
-    return jsonResponse(400, { error: 'Could not read the submitted form data.' });
+    return jsonResponse(400, { error: 'Malformed request body.' });
   }
 
-  const accountType = fields.accountType;
+  const { accountType, data, documents } = body;
+
   if (!['individual', 'joint', 'corporate'].includes(accountType)) {
     return jsonResponse(400, { error: 'A valid accountType is required.' });
   }
 
-  let data;
-  try {
-    data = JSON.parse(fields.data || '{}');
-  } catch (err) {
-    return jsonResponse(400, { error: 'Malformed application data.' });
-  }
+  const docs = Array.isArray(documents) ? documents : [];
 
   try {
     const applicationReference = await generateUniqueReference();
-    const { applicantName, applicantEmail } = resolveApplicantIdentity(accountType, data);
+    const { applicantName, applicantEmail } = resolveApplicantIdentity(accountType, data || {});
 
     // 1. Create the application record
     const { data: appRow, error: appErr } = await supabase
@@ -43,8 +43,8 @@ exports.handler = async (event) => {
         application_reference: applicationReference,
         account_type: accountType,
         status: 'submitted',
-        referred_by: data.account?.referredBy || null,
-        banking_details: data.banking || {},
+        referred_by: data?.account?.referredBy || null,
+        banking_details: data?.banking || {},
         applicant_name: applicantName,
         applicant_email: applicantEmail
       })
@@ -54,27 +54,22 @@ exports.handler = async (event) => {
 
     const applicationId = appRow.id;
 
-    // 2-5. Everything below only depends on applicationId — none of it
-    // depends on any of the others — so run it all concurrently instead
-    // of as four separate sequential round trips. This (plus uploading
-    // all documents in parallel rather than one at a time) is what
-    // brings total execution time comfortably under Netlify's function
-    // timeout, which a fully-sequential version was hitting (502s on
-    // applications with several documents).
-
+    // 2-5. Everything below only depends on applicationId, not on each
+    // other, so it all runs concurrently rather than as sequential
+    // round trips.
     const tasks = [];
 
     // 2. Per-person applicant rows
     const applicantRows = [];
     if (accountType === 'individual' || accountType === 'joint') {
-      applicantRows.push(buildApplicantRow(applicationId, 'primary', data.primary));
+      applicantRows.push(buildApplicantRow(applicationId, 'primary', data?.primary));
     }
     if (accountType === 'joint') {
-      applicantRows.push(buildApplicantRow(applicationId, 'joint_partner', data.jointPartner));
+      applicantRows.push(buildApplicantRow(applicationId, 'joint_partner', data?.jointPartner));
     }
     if (accountType === 'corporate') {
-      applicantRows.push(buildApplicantRow(applicationId, 'signatory_1', data.signatory1));
-      applicantRows.push(buildApplicantRow(applicationId, 'signatory_2', data.signatory2));
+      applicantRows.push(buildApplicantRow(applicationId, 'signatory_1', data?.signatory1));
+      applicantRows.push(buildApplicantRow(applicationId, 'signatory_2', data?.signatory2));
     }
     if (applicantRows.length) {
       tasks.push(
@@ -89,38 +84,32 @@ exports.handler = async (event) => {
       tasks.push(
         supabase.from('corporate_profiles').insert({
           application_id: applicationId,
-          company_info: data.company || {}
+          company_info: data?.company || {}
         }).then(({ error }) => {
           if (error) throw error;
         })
       );
     }
 
-    // 4. Document uploads (each one itself uploads + inserts its record)
-    tasks.push(
-      ...files.map(async (file) => {
-        const storagePath = `${applicationId}/${file.person}_${file.docKey}_${Date.now()}_${sanitizeFilename(file.filename)}`;
-
-        const { error: uploadErr } = await supabase.storage
-          .from(STORAGE_BUCKET)
-          .upload(storagePath, file.content, {
-            contentType: file.mimeType,
-            upsert: false
-          });
-        if (uploadErr) throw uploadErr;
-
-        const { error: docErr } = await supabase.from('application_documents').insert({
-          application_id: applicationId,
-          applicant_role: file.person,
-          document_type: file.docKey,
-          file_name: file.filename,
-          storage_path: storagePath,
-          file_type: file.mimeType,
-          file_size: file.content.length
-        });
-        if (docErr) throw docErr;
-      })
-    );
+    // 4. Document records — files are already uploaded to storage by
+    // this point (via create-upload-url.js + the browser's direct
+    // upload), so this is just recording where each one landed.
+    if (docs.length) {
+      const documentRows = docs.map((d) => ({
+        application_id: applicationId,
+        applicant_role: d.person,
+        document_type: d.docKey,
+        file_name: d.fileName,
+        storage_path: d.path,
+        file_type: d.fileType || null,
+        file_size: d.fileSize || null
+      }));
+      tasks.push(
+        supabase.from('application_documents').insert(documentRows).then(({ error }) => {
+          if (error) throw error;
+        })
+      );
+    }
 
     // 5. Status history — initial "submitted" entry
     tasks.push(
@@ -145,7 +134,7 @@ exports.handler = async (event) => {
         applicantName,
         applicantEmail,
         applicationId,
-        fileCount: files.length
+        fileCount: docs.length
       }),
       applicantEmail
         ? sendApplicantConfirmationEmail({ applicantEmail, applicantName, applicationReference })
@@ -192,9 +181,6 @@ function buildApplicantRow(applicationId, role, personData) {
     pep_info: { pep, pepRole, pepRelated, pepRelation },
     indemnity_accepted: !!indemnityAccepted,
     indemnity_accepted_at: indemnityAccepted ? new Date().toISOString() : null,
-    // Risk disclosure timestamp is trusted from the client, since it
-    // records the exact moment the applicant checked the box — not
-    // the (later) moment the whole application was submitted.
     risk_disclosure_accepted: !!riskDisclosureAccepted,
     risk_disclosure_accepted_at: riskDisclosureAccepted ? (riskDisclosureAcceptedAt || new Date().toISOString()) : null
   };
@@ -217,10 +203,6 @@ function resolveApplicantIdentity(accountType, data) {
   };
 }
 
-function sanitizeFilename(name) {
-  return (name || 'file').replace(/[^a-zA-Z0-9.\-_]/g, '_');
-}
-
 async function generateUniqueReference() {
   const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -236,6 +218,5 @@ async function generateUniqueReference() {
     if (error) throw error;
     if (!data) return candidate; // no collision
   }
-  // Extremely unlikely fallback if 5 random attempts all collided
   return `BGL-${datePart}-${Date.now().toString().slice(-6)}`;
 }

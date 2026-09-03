@@ -311,6 +311,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     margin-bottom:12px;
   }
   .upload.has-file{border-style:solid; border-color:var(--green);}
+  .upload.uploading{border-style:solid; border-color:var(--gold); opacity:.75;}
+  .upload.uploading .upload-btn{pointer-events:none; opacity:.5;}
   .upload-icon{width:36px; height:36px; border-radius:8px; background:rgba(51,153,102,0.1); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:15px;}
   .upload-body{flex:1; min-width:0;}
   .upload-title{font-size:13.5px; font-weight:600; color:var(--ink);}
@@ -631,6 +633,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 </script>
 <script defer src="https://sibforms.com/forms/end-form/build/main.js"></script>
 
+<!-- Supabase JS — used only for direct-to-storage document uploads via
+     a short-lived signed URL minted server-side. The anon key here is
+     the same public-facing key already used by the Learn hub; it grants
+     no storage write access on its own — only the signed token does. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/assets/js/supabase-config.js"></script>
+
 <script>
   // ---------- Waitlist modal ----------
   const overlay = document.getElementById('waitlistOverlay');
@@ -667,6 +676,20 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
      ============================================================ -->
 <script>
 const RISK_DISCLOSURE_URL = '/assets/Risk_Disclosure_Statement.pdf';
+const DOCUMENTS_BUCKET = 'application-documents';
+
+// One anon-key Supabase client, used only to perform direct-to-storage
+// uploads via a signed token minted by create-upload-url.js. This key
+// grants no write access on its own — the signed token is what
+// authorizes each individual upload.
+const sbUpload = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// A private folder name for this attempt's uploads, so files from two
+// different applicants never collide in storage before either of them
+// has a real application record yet.
+const uploadSessionId = (window.crypto && crypto.randomUUID)
+  ? crypto.randomUUID()
+  : 'sess-' + Date.now() + '-' + Math.random().toString(36).slice(2);
 
 const state = {
   accountType: null,
@@ -677,7 +700,7 @@ const state = {
   signatory2: {},
   banking: {},
   account: {},
-  files: {}
+  files: {} // person -> docKey -> { path, fileName, fileType, fileSize }
 };
 
 let steps = [];
@@ -833,7 +856,7 @@ function documentFields(prefix, extra){
   ];
   if(extra) docs = docs.concat(extra);
   return `<fieldset><legend>Documents</legend>
-    <p style="font-size:12.5px; color:rgba(22,36,26,0.55); margin:-4px 0 16px;">Each file must be under 2MB, and everything you upload combined must total under 4.5MB. If a photo is too large, try compressing it or taking it at a lower resolution.</p>` +
+    <p style="font-size:12.5px; color:rgba(22,36,26,0.55); margin:-4px 0 16px;">Each file must be under 5MB (PNG, JPG, or PDF).</p>` +
     docs.map(d => uploadField(prefix, d.key, d.label, d.hint)).join('') +
     `</fieldset>`;
 }
@@ -845,25 +868,25 @@ function uploadField(prefix, key, label, hint){
     <div class="upload-icon">📄</div>
     <div class="upload-body">
       <div class="upload-title">${label}<span class="req">*</span></div>
-      <div class="upload-hint" id="${id}_hint">${hint} · PNG, JPG or PDF, max 2MB</div>
+      <div class="upload-hint" id="${id}_hint">${hint} · PNG, JPG or PDF, max 5MB</div>
     </div>
     <input type="file" id="${id}" accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf" onchange="handleFile('${prefix}','${key}', this, '${id}')">
     <button type="button" class="upload-btn" onclick="document.getElementById('${id}').click()">Upload</button>
   </div>`;
 }
 
-// Netlify Functions accept roughly 6MB per request, and the browser
-// has to base64-encode files before sending them (~33% larger than
-// their raw size) — so the actual safe budget for combined raw file
-// size is well under 6MB. These caps keep submissions reliably inside
-// that limit rather than failing with an opaque error after the fact.
-const MAX_FILE_SIZE = 2 * 1024 * 1024;       // 2MB per file
-const MAX_TOTAL_FILE_SIZE = 4.5 * 1024 * 1024; // 4.5MB combined across all documents
+// Files upload directly from the browser to Supabase Storage (via a
+// signed URL minted by create-upload-url.js), bypassing Netlify's
+// function request-size limit entirely — these caps are now purely
+// about keeping uploads fast and storage costs sane, not a hard
+// platform ceiling.
+const MAX_FILE_SIZE = 5 * 1024 * 1024;        // 5MB per file
+const MAX_TOTAL_FILE_SIZE = 25 * 1024 * 1024; // 25MB combined across all documents
 
 function getTotalFileSize(){
   let total = 0;
   Object.values(state.files).forEach(group => {
-    Object.values(group).forEach(file => { total += file.size; });
+    Object.values(group).forEach(doc => { total += doc.fileSize || 0; });
   });
   return total;
 }
@@ -872,7 +895,7 @@ function formatMB(bytes){
   return (bytes / (1024*1024)).toFixed(1) + 'MB';
 }
 
-function handleFile(prefix, key, input, id){
+async function handleFile(prefix, key, input, id){
   const file = input.files[0];
   if(!file) return;
   const allowed = ['image/png','image/jpeg','application/pdf'];
@@ -888,19 +911,59 @@ function handleFile(prefix, key, input, id){
   }
 
   // Check combined total including this new file before accepting it
-  const previousSize = (state.files[prefix] && state.files[prefix][key]) ? state.files[prefix][key].size : 0;
+  const previousSize = (state.files[prefix] && state.files[prefix][key]) ? (state.files[prefix][key].fileSize || 0) : 0;
   const prospectiveTotal = getTotalFileSize() - previousSize + file.size;
   if(prospectiveTotal > MAX_TOTAL_FILE_SIZE){
-    alert(`Adding this file would bring your total uploads to ${formatMB(prospectiveTotal)}, over the ${formatMB(MAX_TOTAL_FILE_SIZE)} combined limit. Please compress or replace an existing document first.`);
+    alert(`Adding this file would bring your total uploads to ${formatMB(prospectiveTotal)}, over the ${formatMB(MAX_TOTAL_FILE_SIZE)} combined limit. Please remove or replace an existing document first.`);
     input.value = '';
     return;
   }
 
-  if(!state.files[prefix]) state.files[prefix] = {};
-  state.files[prefix][key] = file;
   const wrap = document.getElementById(id+'_wrap');
-  wrap.classList.add('has-file');
-  document.getElementById(id+'_hint').innerHTML = `<span class="upload-filename">${file.name} · ${formatMB(file.size)}</span>`;
+  const hintEl = document.getElementById(id+'_hint');
+  const originalHint = hintEl.innerHTML;
+  wrap.classList.add('uploading');
+  hintEl.textContent = 'Uploading…';
+
+  try{
+    const urlRes = await fetch('/.netlify/functions/create-upload-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: uploadSessionId,
+        person: prefix,
+        docKey: key,
+        filename: file.name,
+        mimeType: file.type,
+        fileSize: file.size
+      })
+    });
+    const urlResult = await urlRes.json();
+    if(!urlRes.ok) throw new Error(urlResult.error || 'Could not prepare the upload.');
+
+    const { error: uploadErr } = await sbUpload.storage
+      .from(DOCUMENTS_BUCKET)
+      .uploadToSignedUrl(urlResult.path, urlResult.token, file, { contentType: file.type });
+    if(uploadErr) throw uploadErr;
+
+    if(!state.files[prefix]) state.files[prefix] = {};
+    state.files[prefix][key] = {
+      path: urlResult.path,
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size
+    };
+
+    wrap.classList.remove('uploading');
+    wrap.classList.add('has-file');
+    hintEl.innerHTML = `<span class="upload-filename">${file.name} · ${formatMB(file.size)}</span>`;
+  } catch(err){
+    console.error('Document upload failed:', err);
+    wrap.classList.remove('uploading');
+    hintEl.innerHTML = originalHint;
+    input.value = '';
+    alert("We couldn't upload that file. Please try again, or contact clientservices@bglafrica.com if this keeps happening.");
+  }
 }
 
 function toggleConditional(id, show){
@@ -1223,40 +1286,40 @@ async function submitApplication(){
   const errorEl = document.getElementById('aowSubmitError');
   errorEl.style.display = 'none';
 
-  // Pre-flight check: catch an oversized combined upload before ever
-  // making the network request, rather than letting the platform kill
-  // the request with an opaque failure after the fact.
-  const totalSize = getTotalFileSize();
-  if(totalSize > MAX_TOTAL_FILE_SIZE){
-    errorEl.textContent = `Your uploaded documents total ${formatMB(totalSize)}, over the ${formatMB(MAX_TOTAL_FILE_SIZE)} combined limit. Please go back to the Documents step and replace a large file with a smaller one, then try again.`;
-    errorEl.style.display = 'block';
-    return;
-  }
-
   nextBtn.disabled = true;
   nextBtn.textContent = 'Submitting…';
 
-  const fd = new FormData();
-  fd.append('accountType', state.accountType);
-  fd.append('data', JSON.stringify({
-    primary: state.primary,
-    jointPartner: state.jointPartner,
-    company: state.company,
-    signatory1: state.signatory1,
-    signatory2: state.signatory2,
-    banking: state.banking,
-    account: state.account
-  }));
+  // Documents are already uploaded to storage by this point (each one
+  // uploaded directly when it was selected, in handleFile) — this only
+  // sends the small metadata pointing at where each one landed, plus
+  // the rest of the form data. No file bytes travel through this
+  // request at all.
+  const documents = [];
   Object.entries(state.files).forEach(([person, docs])=>{
-    Object.entries(docs).forEach(([docKey, file])=>{
-      fd.append(`file__${person}__${docKey}`, file, file.name);
+    Object.entries(docs).forEach(([docKey, doc])=>{
+      documents.push({ person, docKey, ...doc });
     });
   });
+
+  const payload = {
+    accountType: state.accountType,
+    data: {
+      primary: state.primary,
+      jointPartner: state.jointPartner,
+      company: state.company,
+      signatory1: state.signatory1,
+      signatory2: state.signatory2,
+      banking: state.banking,
+      account: state.account
+    },
+    documents
+  };
 
   try{
     const res = await fetch('/.netlify/functions/submit-application', {
       method: 'POST',
-      body: fd
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
     const result = await res.json();
 

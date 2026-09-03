@@ -76,19 +76,33 @@ other page, so it's a normal Netlify-served page like `/faq` or
   Disclosure consent checkbox on the Disclosures step). Both are
   referenced with root-relative paths (`/assets/...`), so they resolve
   correctly regardless of the page's folder depth.
-- **Submission**: the form posts to `/.netlify/functions/submit-application`
-  (multipart form data — all field values as JSON plus the uploaded
-  files). The function lives in `netlify/functions/submit-application.js`,
-  writes to Supabase (schema in `supabase/schema.sql`), uploads documents
-  to a private Supabase Storage bucket, and sends branded Brevo emails
-  (internal alert + applicant confirmation). If the request fails for any
-  reason (e.g. required environment variables aren't set yet), the
-  frontend falls back to a mocked success screen so the flow can still be
-  reviewed end-to-end.
+- **Document uploads**: each file is uploaded **directly from the
+  browser to Supabase Storage** as soon as it's selected, not sent
+  through a Netlify Function. The flow: the browser asks
+  `netlify/functions/create-upload-url.js` for a short-lived signed
+  upload URL (that function's own request/response is tiny — no file
+  bytes touch it), then uses the Supabase JS client
+  (`uploadToSignedUrl`) to upload the file straight to the private
+  `application-documents` bucket. The signed token is the only
+  authorization needed for that one upload — the browser's own anon-key
+  session has no storage write access on its own. This avoids Netlify
+  Functions' own request-size ceiling (~6MB) entirely, which an earlier
+  version hit once base64 encoding was factored in (a 502 with no
+  usable error body). Per-file cap is 5MB, 25MB combined per
+  application — now just a sane UX/cost limit, not a hard platform
+  constraint.
+- **Submission**: once all documents are uploaded, the form posts small
+  JSON (form field values + the list of already-uploaded document
+  paths — no file bytes) to `/.netlify/functions/submit-application`.
+  That function writes everything to Supabase (schema in
+  `supabase/schema.sql`) and sends branded Brevo emails (internal alert
+  + applicant confirmation). A genuine failure shows the applicant a
+  plain "couldn't submit, contact clientservices@bglafrica.com" message
+  — it never silently shows a fake success.
   - **Requires a Git-connected deploy, not drag-and-drop.** Netlify's
     manual drag-and-drop deploy only publishes static files — it does
     not deploy functions. This site must be deployed via a Git-connected
-    Netlify site (or the Netlify CLI) for `submit-application` to run.
+    Netlify site (or the Netlify CLI) for the functions to run.
   - **Environment variables** (set in Netlify → Site settings →
     Environment variables): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
     `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`,
