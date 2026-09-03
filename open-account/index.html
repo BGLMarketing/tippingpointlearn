@@ -832,7 +832,8 @@ function documentFields(prefix, extra){
     {key:'signature', label:'Signature', hint:'Photo or scan of your signature'}
   ];
   if(extra) docs = docs.concat(extra);
-  return `<fieldset><legend>Documents</legend>` +
+  return `<fieldset><legend>Documents</legend>
+    <p style="font-size:12.5px; color:rgba(22,36,26,0.55); margin:-4px 0 16px;">Each file must be under 2MB, and everything you upload combined must total under 4.5MB. If a photo is too large, try compressing it or taking it at a lower resolution.</p>` +
     docs.map(d => uploadField(prefix, d.key, d.label, d.hint)).join('') +
     `</fieldset>`;
 }
@@ -844,11 +845,31 @@ function uploadField(prefix, key, label, hint){
     <div class="upload-icon">📄</div>
     <div class="upload-body">
       <div class="upload-title">${label}<span class="req">*</span></div>
-      <div class="upload-hint" id="${id}_hint">${hint} · PNG, JPG or PDF</div>
+      <div class="upload-hint" id="${id}_hint">${hint} · PNG, JPG or PDF, max 2MB</div>
     </div>
     <input type="file" id="${id}" accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf" onchange="handleFile('${prefix}','${key}', this, '${id}')">
     <button type="button" class="upload-btn" onclick="document.getElementById('${id}').click()">Upload</button>
   </div>`;
+}
+
+// Netlify Functions accept roughly 6MB per request, and the browser
+// has to base64-encode files before sending them (~33% larger than
+// their raw size) — so the actual safe budget for combined raw file
+// size is well under 6MB. These caps keep submissions reliably inside
+// that limit rather than failing with an opaque error after the fact.
+const MAX_FILE_SIZE = 2 * 1024 * 1024;       // 2MB per file
+const MAX_TOTAL_FILE_SIZE = 4.5 * 1024 * 1024; // 4.5MB combined across all documents
+
+function getTotalFileSize(){
+  let total = 0;
+  Object.values(state.files).forEach(group => {
+    Object.values(group).forEach(file => { total += file.size; });
+  });
+  return total;
+}
+
+function formatMB(bytes){
+  return (bytes / (1024*1024)).toFixed(1) + 'MB';
 }
 
 function handleFile(prefix, key, input, id){
@@ -860,16 +881,26 @@ function handleFile(prefix, key, input, id){
     input.value = '';
     return;
   }
-  if(file.size > 5*1024*1024){
-    alert('File is larger than 5MB. Please upload a smaller file.');
+  if(file.size > MAX_FILE_SIZE){
+    alert(`This file is ${formatMB(file.size)} — please upload a file under ${formatMB(MAX_FILE_SIZE)}. If it's a photo, try taking it at a lower resolution or compressing it first.`);
     input.value = '';
     return;
   }
+
+  // Check combined total including this new file before accepting it
+  const previousSize = (state.files[prefix] && state.files[prefix][key]) ? state.files[prefix][key].size : 0;
+  const prospectiveTotal = getTotalFileSize() - previousSize + file.size;
+  if(prospectiveTotal > MAX_TOTAL_FILE_SIZE){
+    alert(`Adding this file would bring your total uploads to ${formatMB(prospectiveTotal)}, over the ${formatMB(MAX_TOTAL_FILE_SIZE)} combined limit. Please compress or replace an existing document first.`);
+    input.value = '';
+    return;
+  }
+
   if(!state.files[prefix]) state.files[prefix] = {};
   state.files[prefix][key] = file;
   const wrap = document.getElementById(id+'_wrap');
   wrap.classList.add('has-file');
-  document.getElementById(id+'_hint').innerHTML = `<span class="upload-filename">${file.name}</span>`;
+  document.getElementById(id+'_hint').innerHTML = `<span class="upload-filename">${file.name} · ${formatMB(file.size)}</span>`;
 }
 
 function toggleConditional(id, show){
@@ -1191,6 +1222,17 @@ async function submitApplication(){
   const nextBtn = document.getElementById('aowNextBtn');
   const errorEl = document.getElementById('aowSubmitError');
   errorEl.style.display = 'none';
+
+  // Pre-flight check: catch an oversized combined upload before ever
+  // making the network request, rather than letting the platform kill
+  // the request with an opaque failure after the fact.
+  const totalSize = getTotalFileSize();
+  if(totalSize > MAX_TOTAL_FILE_SIZE){
+    errorEl.textContent = `Your uploaded documents total ${formatMB(totalSize)}, over the ${formatMB(MAX_TOTAL_FILE_SIZE)} combined limit. Please go back to the Documents step and replace a large file with a smaller one, then try again.`;
+    errorEl.style.display = 'block';
+    return;
+  }
+
   nextBtn.disabled = true;
   nextBtn.textContent = 'Submitting…';
 
@@ -1231,7 +1273,7 @@ async function submitApplication(){
     showSuccess(result.applicationReference, getApplicantEmail());
   } catch(err){
     console.error('submit-application failed:', err);
-    errorEl.textContent = 'We could not submit your application: ' + err.message + ' Please try again, or contact clientservices@bglafrica.com if this keeps happening.';
+    errorEl.textContent = "We couldn't submit your application. Kindly contact clientservices@bglafrica.com.";
     errorEl.style.display = 'block';
     nextBtn.disabled = false;
     nextBtn.textContent = 'Submit application';
