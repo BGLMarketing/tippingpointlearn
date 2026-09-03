@@ -54,7 +54,17 @@ exports.handler = async (event) => {
 
     const applicationId = appRow.id;
 
-    // 2. Insert per-person applicant rows
+    // 2-5. Everything below only depends on applicationId — none of it
+    // depends on any of the others — so run it all concurrently instead
+    // of as four separate sequential round trips. This (plus uploading
+    // all documents in parallel rather than one at a time) is what
+    // brings total execution time comfortably under Netlify's function
+    // timeout, which a fully-sequential version was hitting (502s on
+    // applications with several documents).
+
+    const tasks = [];
+
+    // 2. Per-person applicant rows
     const applicantRows = [];
     if (accountType === 'individual' || accountType === 'joint') {
       applicantRows.push(buildApplicantRow(applicationId, 'primary', data.primary));
@@ -67,49 +77,63 @@ exports.handler = async (event) => {
       applicantRows.push(buildApplicantRow(applicationId, 'signatory_2', data.signatory2));
     }
     if (applicantRows.length) {
-      const { error: applErr } = await supabase.from('applicants').insert(applicantRows);
-      if (applErr) throw applErr;
+      tasks.push(
+        supabase.from('applicants').insert(applicantRows).then(({ error }) => {
+          if (error) throw error;
+        })
+      );
     }
 
     // 3. Corporate profile
     if (accountType === 'corporate') {
-      const { error: corpErr } = await supabase.from('corporate_profiles').insert({
-        application_id: applicationId,
-        company_info: data.company || {}
-      });
-      if (corpErr) throw corpErr;
+      tasks.push(
+        supabase.from('corporate_profiles').insert({
+          application_id: applicationId,
+          company_info: data.company || {}
+        }).then(({ error }) => {
+          if (error) throw error;
+        })
+      );
     }
 
-    // 4. Upload documents to storage + record them
-    for (const file of files) {
-      const storagePath = `${applicationId}/${file.person}_${file.docKey}_${Date.now()}_${sanitizeFilename(file.filename)}`;
+    // 4. Document uploads (each one itself uploads + inserts its record)
+    tasks.push(
+      ...files.map(async (file) => {
+        const storagePath = `${applicationId}/${file.person}_${file.docKey}_${Date.now()}_${sanitizeFilename(file.filename)}`;
 
-      const { error: uploadErr } = await supabase.storage
-        .from(STORAGE_BUCKET)
-        .upload(storagePath, file.content, {
-          contentType: file.mimeType,
-          upsert: false
+        const { error: uploadErr } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .upload(storagePath, file.content, {
+            contentType: file.mimeType,
+            upsert: false
+          });
+        if (uploadErr) throw uploadErr;
+
+        const { error: docErr } = await supabase.from('application_documents').insert({
+          application_id: applicationId,
+          applicant_role: file.person,
+          document_type: file.docKey,
+          file_name: file.filename,
+          storage_path: storagePath,
+          file_type: file.mimeType,
+          file_size: file.content.length
         });
-      if (uploadErr) throw uploadErr;
-
-      const { error: docErr } = await supabase.from('application_documents').insert({
-        application_id: applicationId,
-        applicant_role: file.person,
-        document_type: file.docKey,
-        file_name: file.filename,
-        storage_path: storagePath,
-        file_type: file.mimeType,
-        file_size: file.content.length
-      });
-      if (docErr) throw docErr;
-    }
+        if (docErr) throw docErr;
+      })
+    );
 
     // 5. Status history — initial "submitted" entry
-    await supabase.from('application_status_history').insert({
-      application_id: applicationId,
-      status: 'submitted',
-      changed_by: 'system'
-    });
+    tasks.push(
+      supabase.from('application_status_history').insert({
+        application_id: applicationId,
+        status: 'submitted',
+        changed_by: 'system'
+      }).then(({ error }) => {
+        if (error) throw error;
+      })
+    );
+
+    await Promise.all(tasks);
 
     // 6. Notifications — internal alert + applicant confirmation.
     // Emails should not block a successful submission from returning,
