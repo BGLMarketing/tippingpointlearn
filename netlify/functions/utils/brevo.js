@@ -167,10 +167,89 @@ async function sendApplicantConfirmationEmail({ applicantEmail, applicantName, a
   });
 }
 
+/* ============================================================
+   Status-change emails (sent by update-application-status)
+   ============================================================ */
+
+async function sendApplicantUnderReviewEmail({ applicantEmail, applicantName, applicationReference }) {
+  const trackUrl = `${BRAND.siteUrl}/track-application?ref=${encodeURIComponent(applicationReference)}`;
+
+  const body = `
+    <h2 style="font-size:18px; margin:0 0 16px; color:${BRAND.green};">Your application is under review</h2>
+    <p style="font-size:14px; color:${BRAND.ink}; margin:0 0 12px;">Hi ${applicantName || 'there'},</p>
+    <p style="font-size:14px; color:${BRAND.ink}; line-height:1.6; margin:0 0 12px;">
+      Your BGL Securities account opening request has moved to review by our compliance team.
+    </p>
+    <p style="font-size:14px; color:${BRAND.muted}; margin:0 0 4px;">Application reference</p>
+    <p style="font-size:16px; font-weight:bold; color:${BRAND.green}; margin:0 0 16px;">${applicationReference}</p>
+    <p style="font-size:14px; color:${BRAND.ink}; line-height:1.6;">We'll notify you as soon as a decision is made.</p>
+    ${button('Track your application', trackUrl)}
+  `;
+
+  const html = wrapEmail('Your BGL account opening request is under review', body);
+
+  return sendBrevoEmail({
+    to: applicantEmail,
+    subject: 'Your BGL Account Opening Request Is Under Review',
+    html
+  });
+}
+
+async function sendApplicantOpenedEmail({ applicantEmail, applicantName, applicationReference, chn }) {
+  const body = `
+    <h2 style="font-size:18px; margin:0 0 16px; color:${BRAND.green};">Your account has been opened</h2>
+    <p style="font-size:14px; color:${BRAND.ink}; margin:0 0 12px;">Hi ${applicantName || 'there'},</p>
+    <p style="font-size:14px; color:${BRAND.ink}; line-height:1.6; margin:0 0 12px;">
+      Good news — your BGL account opening request has been completed and your account has been successfully opened.
+    </p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px; margin-bottom:16px;">
+      <tr><td style="padding:4px 0; color:${BRAND.muted};">Application reference</td><td style="padding:4px 0; text-align:right; font-weight:bold;">${applicationReference}</td></tr>
+      <tr><td style="padding:4px 0; color:${BRAND.muted};">CHN</td><td style="padding:4px 0; text-align:right; font-weight:bold;">${chn}</td></tr>
+    </table>
+    <p style="font-size:14px; color:${BRAND.ink}; line-height:1.6;">Thank you for choosing BGL Securities.</p>
+    ${button('Go to Tipping Point', BRAND.siteUrl)}
+  `;
+
+  const html = wrapEmail('Your BGL account has been opened', body);
+
+  return sendBrevoEmail({
+    to: applicantEmail,
+    subject: 'Your BGL Account Has Been Opened',
+    html
+  });
+}
+
+async function sendApplicantRejectedEmail({ applicantEmail, applicantName, applicationReference, reason }) {
+  const body = `
+    <h2 style="font-size:18px; margin:0 0 16px; color:${BRAND.green};">Update on your application</h2>
+    <p style="font-size:14px; color:${BRAND.ink}; margin:0 0 12px;">Hi ${applicantName || 'there'},</p>
+    <p style="font-size:14px; color:${BRAND.ink}; line-height:1.6; margin:0 0 12px;">
+      We've reviewed your BGL account opening request, but we're unable to complete the application at this time.
+    </p>
+    <p style="font-size:14px; color:${BRAND.muted}; margin:0 0 4px;">Application reference</p>
+    <p style="font-size:15px; font-weight:bold; color:${BRAND.ink}; margin:0 0 16px;">${applicationReference}</p>
+    <p style="font-size:14px; color:${BRAND.muted}; margin:0 0 4px;">Reason</p>
+    <p style="font-size:14px; color:${BRAND.ink}; line-height:1.6; margin:0 0 16px;">${reason}</p>
+    <p style="font-size:14px; color:${BRAND.ink}; line-height:1.6;">If you'd like to correct the issue above and reapply, or if you have questions, our team is happy to help.</p>
+    ${button('Start a new application', `${BRAND.siteUrl}/open-account`)}
+  `;
+
+  const html = wrapEmail('Update on your BGL account opening request', body);
+
+  return sendBrevoEmail({
+    to: applicantEmail,
+    subject: 'Update on Your BGL Account Opening Request',
+    html
+  });
+}
+
 module.exports = {
   wrapEmail,
   button,
   sendBrevoEmail,
   sendInternalNewSubmissionAlert,
-  sendApplicantConfirmationEmail
+  sendApplicantConfirmationEmail,
+  sendApplicantUnderReviewEmail,
+  sendApplicantOpenedEmail,
+  sendApplicantRejectedEmail
 };

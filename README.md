@@ -98,15 +98,30 @@ other page, so it's a normal Netlify-served page like `/faq` or
     Risk Disclosure consent fields existed, run
     `supabase/migration_risk_disclosure.sql` instead of re-running the
     whole schema.
-  - Still to build: a status-update function for the admin dashboard
-    (`submitted → under_review → opened/rejected`), the admin dashboard
-    UI itself, and a public "track your application" page.
+  - **Admin review**: `/admin` (the same login used for Learn articles)
+    has a second tab, "Account applications" — a list of submissions
+    (filterable by status, searchable by name/email/reference), a detail
+    view (applicant/company info, banking, uploaded documents via
+    short-lived signed URLs, and full status history), and the actions
+    to move an application `submitted → under_review → opened/rejected`.
+    Marking an application **opened** requires a CHN and CSCS Account
+    Number; **rejecting** requires a reason of at least 10 characters —
+    both are enforced in `netlify/functions/update-application-status.js`,
+    which also sends the applicant the matching status email and writes
+    the audit trail row. The admin page never writes these tables
+    directly — only that function does, using the service role key, so
+    the emails and audit trail can't be bypassed by calling Supabase
+    straight from the browser. Run `supabase/admin_policies.sql` once
+    (after `schema.sql`) to grant the authenticated admin session
+    read-only access to these tables and to the document storage bucket.
+  - Still to build: a public "track your application" page for
+    applicants (reference + email lookup).
 - **Consent tracking**: the PEP/indemnity/risk-disclosure checkboxes on
   the Disclosures step record the exact client-side timestamp at the
   moment each box is checked (not the later submission time), and this
   timestamp is stored as given rather than overwritten with the server's
   submission time.
-- **Nav entry point**: every page's nav includes an "Open an Account"
+- **Nav entry point**: every page's nav includes an "Open BGL Account"
   link to `/open-account` (styled as a `.btn.btn-ghost`, next to "Join
   the community"). On `/open-account` itself, that same nav-cta slot
   becomes a static, non-clickable label — the same pattern used for

@@ -568,6 +568,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   .status-draft{ background:var(--paper-dim); border:1px solid var(--line-dark); color:rgba(22,36,26,0.6); }
   .status-published{ background:rgba(51,153,102,0.14); color:var(--green-deep); }
   .status-unpublished{ background:rgba(226,160,64,0.16); color:#8a5c1e; }
+  .status-submitted{ background:var(--paper-dim); border:1px solid var(--line-dark); color:rgba(22,36,26,0.6); }
+  .status-under_review{ background:rgba(226,160,64,0.16); color:#8a5c1e; }
+  .status-opened{ background:rgba(51,153,102,0.14); color:var(--green-deep); }
+  .status-rejected{ background:rgba(179,69,47,0.12); color:#b3452f; }
   .table-actions{ display:flex; gap:8px; }
   .link-btn{
     background:none; border:none; cursor:pointer;
@@ -577,9 +581,51 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   .link-btn.danger{ color:#b3452f; }
   .empty-row td{ text-align:center; color:rgba(22,36,26,0.5); padding:32px 12px; }
 
+  .tab-bar{ display:flex; gap:6px; margin-bottom:28px; border-bottom:1px solid var(--line-dark); }
+  .tab-btn{
+    background:none; border:none; cursor:pointer;
+    font-family:'Inter', sans-serif; font-size:14.5px; font-weight:600;
+    color:rgba(22,36,26,0.5); padding:12px 4px; margin-right:22px;
+    border-bottom:2px solid transparent; transition:color .15s ease, border-color .15s ease;
+  }
+  .tab-btn.active{ color:var(--green-deep); border-bottom-color:var(--green-deep); }
+
+  .filter-row{ display:flex; gap:12px; margin-bottom:18px; flex-wrap:wrap; align-items:flex-end; }
+  .filter-row .field{ margin-bottom:0; min-width:160px; }
+  .filter-row .field.grow{ flex:1; min-width:220px; }
+
+  .detail-panel{
+    background:var(--paper-dim); border:1px solid var(--line-dark);
+    border-radius:16px; padding:28px 26px; margin:0 0 40px;
+  }
+  .detail-panel .back-link{ font-size:13px; margin-bottom:18px; display:inline-block; }
+  .detail-overview{ display:flex; justify-content:space-between; flex-wrap:wrap; gap:16px; margin-bottom:24px; }
+  .detail-overview h3{ font-size:19px; margin-bottom:4px; }
+  .detail-overview .ref{ font-family:'IBM Plex Mono', monospace; font-size:12.5px; color:rgba(22,36,26,0.55); }
+  .detail-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+  .detail-section{ margin-bottom:26px; }
+  .detail-section h4{
+    font-size:13.5px; color:var(--green-deep); margin-bottom:12px;
+    border-bottom:1px solid var(--line-dark); padding-bottom:8px;
+  }
+  .detail-row{ display:flex; justify-content:space-between; gap:16px; font-size:13.5px; padding:5px 0; }
+  .detail-row span:first-child{ color:rgba(22,36,26,0.55); }
+  .detail-row span:last-child{ text-align:right; font-weight:600; max-width:60%; }
+  .doc-list{ display:flex; flex-direction:column; gap:8px; }
+  .doc-item{
+    display:flex; justify-content:space-between; align-items:center;
+    background:#fff; border:1px solid var(--line-dark); border-radius:10px;
+    padding:10px 14px; font-size:13.5px;
+  }
+  .doc-item .doc-name{ font-weight:600; }
+  .doc-item .doc-meta{ font-size:12px; color:rgba(22,36,26,0.5); }
+  .history-list{ font-size:13px; color:rgba(22,36,26,0.65); }
+  .history-list li{ margin-bottom:6px; }
+
   @media (max-width:600px){
     .field-row{ grid-template-columns:1fr; }
     .article-table{ display:block; overflow-x:auto; white-space:nowrap; }
+    .filter-row{ flex-direction:column; align-items:stretch; }
   }
 </style>
 
@@ -634,7 +680,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   <div id="login-view">
     <div class="login-card">
       <h2>Admin login</h2>
-      <p class="sub">Sign in to manage Learn articles.</p>
+      <p class="sub">Sign in to manage Tipping Point content.</p>
       <form id="login-form">
         <div class="field">
           <label for="login-email">Email</label>
@@ -653,8 +699,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   <div id="dashboard-view" hidden>
     <div class="admin-topbar">
       <div class="admin-head">
-        <div class="eyebrow">Learn admin</div>
-        <h1>Manage articles</h1>
+        <div class="eyebrow">Admin</div>
+        <h1 id="dashboard-title">Manage articles</h1>
       </div>
       <div style="text-align:right;">
         <div class="user-email" id="user-email"></div>
@@ -662,6 +708,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       </div>
     </div>
 
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tab-articles" onclick="switchTab('articles')">Learn articles</button>
+      <button class="tab-btn" id="tab-applications" onclick="switchTab('applications')">Account applications</button>
+    </div>
+
+    <div id="articles-panel">
     <button class="btn btn-primary" id="new-article-btn">+ New article</button>
 
     <div class="form-card" id="form-card" hidden>
@@ -710,9 +762,86 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <tr class="empty-row"><td colspan="4">Loading…</td></tr>
       </tbody>
     </table>
+    </div>
+
+    <div id="applications-panel" hidden>
+
+      <div id="applications-list-view">
+        <div class="filter-row">
+          <div class="field">
+            <label for="app-status-filter">Status</label>
+            <select id="app-status-filter" onchange="loadApplications()">
+              <option value="">All statuses</option>
+              <option value="submitted">Submitted</option>
+              <option value="under_review">Under review</option>
+              <option value="opened">Opened</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+          <div class="field grow">
+            <label for="app-search">Search</label>
+            <input type="text" id="app-search" placeholder="Name, email, or reference" oninput="loadApplications()">
+          </div>
+        </div>
+
+        <table class="article-table">
+          <thead>
+            <tr><th>Reference</th><th>Applicant</th><th>Type</th><th>Date</th><th>Status</th><th>CHN</th><th></th></tr>
+          </thead>
+          <tbody id="applications-table-body">
+            <tr class="empty-row"><td colspan="7">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="application-detail-view" hidden></div>
+
+    </div>
+
   </div>
 
 </div>
+
+<!-- ===== Mark as Opened modal ===== -->
+<div class="modal-overlay" id="openedModalOverlay" onclick="if(event.target===this) closeOpenedModal()">
+  <div class="modal" role="dialog" aria-modal="true">
+    <button class="modal-close" onclick="closeOpenedModal()" aria-label="Close">✕</button>
+    <div class="eyebrow">Mark as opened</div>
+    <h3>Account opened</h3>
+    <p class="sub">Enter the account's CSCS details. This will email the applicant with their CHN.</p>
+    <div class="field">
+      <label for="opened-chn">Clearing House Number (CHN)</label>
+      <input type="text" id="opened-chn">
+    </div>
+    <div class="field">
+      <label for="opened-csc">CSCS Account Number</label>
+      <input type="text" id="opened-csc">
+    </div>
+    <div class="field">
+      <label for="opened-note">Optional note</label>
+      <textarea id="opened-note" style="min-height:70px;"></textarea>
+    </div>
+    <button class="btn btn-primary" style="width:100%; padding:13px;" onclick="confirmMarkOpened()">Confirm account opening</button>
+    <div class="form-status" id="opened-modal-status"></div>
+  </div>
+</div>
+
+<!-- ===== Reject Application modal ===== -->
+<div class="modal-overlay" id="rejectModalOverlay" onclick="if(event.target===this) closeRejectModal()">
+  <div class="modal" role="dialog" aria-modal="true">
+    <button class="modal-close" onclick="closeRejectModal()" aria-label="Close">✕</button>
+    <div class="eyebrow">Reject application</div>
+    <h3>Reject application</h3>
+    <p class="sub">The applicant will be emailed this reason, so keep it clear and specific.</p>
+    <div class="field">
+      <label for="reject-reason">Reason for rejection</label>
+      <textarea id="reject-reason" style="min-height:90px;"></textarea>
+    </div>
+    <button class="btn btn-primary" style="width:100%; padding:13px; background:#b3452f;" onclick="confirmReject()">Reject application</button>
+    <div class="form-status" id="reject-modal-status"></div>
+  </div>
+</div>
+
 <footer id="waitlist">
   <div class="container">
     <div class="foot-top">
@@ -944,6 +1073,309 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
   sb.auth.onAuthStateChange((_event, _session) => { checkAuth(); });
   checkAuth();
+
+  /* ============================================================
+     TAB SWITCHING
+     ============================================================ */
+  window.switchTab = function(tab){
+    const isArticles = tab === 'articles';
+    document.getElementById('tab-articles').classList.toggle('active', isArticles);
+    document.getElementById('tab-applications').classList.toggle('active', !isArticles);
+    document.getElementById('articles-panel').hidden = !isArticles;
+    document.getElementById('applications-panel').hidden = isArticles;
+    document.getElementById('dashboard-title').textContent = isArticles ? 'Manage articles' : 'Account opening applications';
+    if(!isArticles) loadApplications();
+  };
+
+  /* ============================================================
+     ACCOUNT OPENING APPLICATIONS
+     ============================================================ */
+  let currentApplication = null;
+
+  async function loadApplications(){
+    const listView = document.getElementById('applications-list-view');
+    const detailView = document.getElementById('application-detail-view');
+    listView.hidden = false;
+    detailView.hidden = true;
+
+    const tbody = document.getElementById('applications-table-body');
+    const statusFilter = document.getElementById('app-status-filter').value;
+    const search = document.getElementById('app-search').value.trim().toLowerCase();
+
+    let query = sb.from('account_opening_applications').select('*').order('submitted_at', { ascending: false });
+    if(statusFilter) query = query.eq('status', statusFilter);
+
+    const { data, error } = await query;
+    if(error){
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="7">Error loading applications: ${escapeHtml(error.message)}</td></tr>`;
+      return;
+    }
+
+    let rows = data || [];
+    if(search){
+      rows = rows.filter(r =>
+        (r.applicant_name || '').toLowerCase().includes(search) ||
+        (r.applicant_email || '').toLowerCase().includes(search) ||
+        (r.application_reference || '').toLowerCase().includes(search)
+      );
+    }
+
+    if(rows.length === 0){
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No applications match.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = rows.map(a => {
+      const date = new Date(a.submitted_at).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+      return `<tr>
+        <td style="font-family:'IBM Plex Mono', monospace; font-size:12.5px;">${escapeHtml(a.application_reference)}</td>
+        <td>${escapeHtml(a.applicant_name || '—')}</td>
+        <td style="text-transform:capitalize;">${escapeHtml(a.account_type)}</td>
+        <td>${date}</td>
+        <td><span class="status-pill status-${a.status}">${a.status.replace('_',' ')}</span></td>
+        <td>${escapeHtml(a.chn || '—')}</td>
+        <td class="table-actions"><button class="link-btn" onclick="viewApplication('${a.id}')">View</button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  window.viewApplication = async function(id){
+    document.getElementById('applications-list-view').hidden = true;
+    const detailView = document.getElementById('application-detail-view');
+    detailView.hidden = false;
+    detailView.innerHTML = '<p style="color:rgba(22,36,26,0.5);">Loading…</p>';
+
+    const [{ data: app, error: appErr }, { data: applicants }, { data: corp }, { data: docs }, { data: history }] = await Promise.all([
+      sb.from('account_opening_applications').select('*').eq('id', id).single(),
+      sb.from('applicants').select('*').eq('application_id', id),
+      sb.from('corporate_profiles').select('*').eq('application_id', id).maybeSingle(),
+      sb.from('application_documents').select('*').eq('application_id', id),
+      sb.from('application_status_history').select('*').eq('application_id', id).order('changed_at', { ascending: true })
+    ]);
+
+    if(appErr || !app){
+      detailView.innerHTML = `<p style="color:#b3452f;">Could not load this application.</p><button class="link-btn" onclick="backToList()">← Back to list</button>`;
+      return;
+    }
+
+    currentApplication = app;
+
+    const byRole = {};
+    (applicants || []).forEach(a => { byRole[a.applicant_role] = a; });
+
+    const roleLabels = { primary: 'Primary account holder', joint_partner: 'Joint account partner', signatory_1: 'Authorised signatory 1', signatory_2: 'Authorised signatory 2' };
+
+    let applicantsHtml = '';
+    Object.entries(byRole).forEach(([role, a]) => {
+      const info = a.personal_info || {};
+      const name = a.applicant_role === 'joint_partner'
+        ? (info.name || '—')
+        : [info.title, info.surname, info.otherNames].filter(Boolean).join(' ') || '—';
+      applicantsHtml += `<div class="detail-section">
+        <h4>${roleLabels[role] || role}</h4>
+        ${detailRow('Name', name)}
+        ${detailRow('Email', info.email)}
+        ${detailRow('Phone', info.phone)}
+        ${detailRow('Occupation', info.occupation)}
+        ${detailRow('PEP declared', a.pep_info && a.pep_info.pep)}
+        ${detailRow('Indemnity accepted', a.indemnity_accepted ? 'Yes' : 'No')}
+        ${detailRow('Risk disclosure accepted', a.risk_disclosure_accepted ? 'Yes, ' + new Date(a.risk_disclosure_accepted_at).toLocaleString() : 'No')}
+      </div>`;
+    });
+
+    let companyHtml = '';
+    if(corp && corp.company_info){
+      const c = corp.company_info;
+      companyHtml = `<div class="detail-section">
+        <h4>Company</h4>
+        ${detailRow('Registered name', c.companyName)}
+        ${detailRow('RC number', c.rcNumber)}
+        ${detailRow('TIN', c.tin)}
+        ${detailRow('Email', c.email)}
+        ${detailRow('Phone', c.phone)}
+        ${detailRow('Business address', c.businessAddress)}
+      </div>`;
+    }
+
+    const banking = app.banking_details || {};
+    const bankingHtml = `<div class="detail-section">
+      <h4>Banking</h4>
+      ${detailRow('Bank', banking.bankName)}
+      ${detailRow('Account name', banking.accountName)}
+      ${detailRow('Account number', banking.accountNumber)}
+      ${detailRow('Account type', banking.accountType)}
+      ${detailRow('Direct settlement', banking.directSettlement)}
+      ${detailRow('Source of funds', banking.sourceOfFunds)}
+    </div>`;
+
+    const docsHtml = `<div class="detail-section">
+      <h4>Documents (${(docs || []).length})</h4>
+      <div class="doc-list">
+        ${(docs && docs.length) ? docs.map(d => `
+          <div class="doc-item">
+            <div>
+              <div class="doc-name">${escapeHtml(d.document_type)} <span class="doc-meta">— ${escapeHtml(d.applicant_role)}</span></div>
+              <div class="doc-meta">${escapeHtml(d.file_name)}</div>
+            </div>
+            <button class="link-btn" onclick="viewDocument('${d.storage_path}')">View</button>
+          </div>`).join('') : '<p style="font-size:13px; color:rgba(22,36,26,0.5);">No documents uploaded.</p>'}
+      </div>
+    </div>`;
+
+    const historyHtml = `<div class="detail-section">
+      <h4>Status history</h4>
+      <ul class="history-list">
+        ${(history || []).map(h => `<li>${escapeHtml(h.status.replace('_',' '))} — ${escapeHtml(h.changed_by)} — ${new Date(h.changed_at).toLocaleString()}${h.reason ? ' — ' + escapeHtml(h.reason) : ''}</li>`).join('')}
+      </ul>
+    </div>`;
+
+    const actions = renderActionButtons(app);
+
+    detailView.innerHTML = `
+      <a class="link-btn back-link" onclick="backToList()">← Back to list</a>
+      <div class="detail-panel">
+        <div class="detail-overview">
+          <div>
+            <h3>${escapeHtml(app.applicant_name || 'Untitled application')}</h3>
+            <div class="ref">${escapeHtml(app.application_reference)} · <span class="status-pill status-${app.status}">${app.status.replace('_',' ')}</span></div>
+          </div>
+          <div class="detail-actions">${actions}</div>
+        </div>
+        ${detailRow('Account type', capitalize(app.account_type))}
+        ${detailRow('Referred by', app.referred_by)}
+        ${detailRow('Email', app.applicant_email)}
+        ${detailRow('Submitted', new Date(app.submitted_at).toLocaleString())}
+        ${app.chn ? detailRow('CHN', app.chn) : ''}
+        ${app.csc_account_number ? detailRow('CSCS Account Number', app.csc_account_number) : ''}
+        ${app.rejection_reason ? detailRow('Rejection reason', app.rejection_reason) : ''}
+        <div style="margin-top:22px;">
+          ${companyHtml}
+          ${applicantsHtml}
+          ${bankingHtml}
+          ${docsHtml}
+          ${historyHtml}
+        </div>
+      </div>
+    `;
+  };
+
+  function renderActionButtons(app){
+    if(app.status === 'submitted'){
+      return `<button class="btn btn-ghost" onclick="startReview('${app.id}')">Start review</button>`;
+    }
+    if(app.status === 'under_review'){
+      return `
+        <button class="btn btn-primary" onclick="openOpenedModal('${app.id}')">Mark as opened</button>
+        <button class="btn btn-ghost" style="color:#b3452f; border-color:#b3452f;" onclick="openRejectModal('${app.id}')">Reject</button>
+      `;
+    }
+    return '';
+  }
+
+  function detailRow(label, value){
+    if(value === undefined || value === null || value === '') return '';
+    return `<div class="detail-row"><span>${escapeHtml(label)}</span><span>${escapeHtml(String(value))}</span></div>`;
+  }
+  function capitalize(s){ return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
+
+  window.backToList = function(){
+    document.getElementById('application-detail-view').hidden = true;
+    document.getElementById('applications-list-view').hidden = false;
+    loadApplications();
+  };
+
+  window.viewDocument = async function(storagePath){
+    const { data, error } = await sb.storage.from('application-documents').createSignedUrl(storagePath, 600);
+    if(error || !data){
+      alert('Could not open this document: ' + (error ? error.message : 'unknown error'));
+      return;
+    }
+    window.open(data.signedUrl, '_blank', 'noopener');
+  };
+
+  async function getAuthToken(){
+    const { data: { session } } = await sb.auth.getSession();
+    return session ? session.access_token : null;
+  }
+
+  async function callStatusUpdate(payload){
+    const token = await getAuthToken();
+    const res = await fetch('/.netlify/functions/update-application-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(payload)
+    });
+    const result = await res.json();
+    if(!res.ok) throw new Error(result.error || 'Something went wrong.');
+    return result;
+  }
+
+  window.startReview = async function(id){
+    try{
+      await callStatusUpdate({ applicationId: id, newStatus: 'under_review' });
+      await viewApplication(id);
+    } catch(err){
+      alert(err.message);
+    }
+  };
+
+  window.openOpenedModal = function(id){
+    currentApplication = { id };
+    document.getElementById('opened-chn').value = '';
+    document.getElementById('opened-csc').value = '';
+    document.getElementById('opened-note').value = '';
+    document.getElementById('opened-modal-status').textContent = '';
+    document.getElementById('openedModalOverlay').classList.add('open');
+  };
+  window.closeOpenedModal = function(){
+    document.getElementById('openedModalOverlay').classList.remove('open');
+  };
+  window.confirmMarkOpened = async function(){
+    const chn = document.getElementById('opened-chn').value.trim();
+    const cscAccountNumber = document.getElementById('opened-csc').value.trim();
+    const adminNote = document.getElementById('opened-note').value.trim();
+    const statusEl = document.getElementById('opened-modal-status');
+    if(!chn || !cscAccountNumber){
+      statusEl.textContent = 'CHN and CSCS Account Number are both required.';
+      statusEl.className = 'form-status error';
+      return;
+    }
+    try{
+      await callStatusUpdate({ applicationId: currentApplication.id, newStatus: 'opened', chn, cscAccountNumber, adminNote });
+      closeOpenedModal();
+      await viewApplication(currentApplication.id);
+    } catch(err){
+      statusEl.textContent = err.message;
+      statusEl.className = 'form-status error';
+    }
+  };
+
+  window.openRejectModal = function(id){
+    currentApplication = { id };
+    document.getElementById('reject-reason').value = '';
+    document.getElementById('reject-modal-status').textContent = '';
+    document.getElementById('rejectModalOverlay').classList.add('open');
+  };
+  window.closeRejectModal = function(){
+    document.getElementById('rejectModalOverlay').classList.remove('open');
+  };
+  window.confirmReject = async function(){
+    const rejectionReason = document.getElementById('reject-reason').value.trim();
+    const statusEl = document.getElementById('reject-modal-status');
+    if(rejectionReason.length < 10){
+      statusEl.textContent = 'Please provide a reason of at least 10 characters.';
+      statusEl.className = 'form-status error';
+      return;
+    }
+    try{
+      await callStatusUpdate({ applicationId: currentApplication.id, newStatus: 'rejected', rejectionReason });
+      closeRejectModal();
+      await viewApplication(currentApplication.id);
+    } catch(err){
+      statusEl.textContent = err.message;
+      statusEl.className = 'form-status error';
+    }
+  };
 </script>
 
 
