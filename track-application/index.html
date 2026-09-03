@@ -19,7 +19,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tipping Point — Open an Account with BGL</title>
+<title>Tipping Point — Track Your Application</title>
 
 <!-- Brevo form dependencies (required by their submission script — kept for the
      "Join the waitlist" modal shared with the rest of the site) -->
@@ -411,7 +411,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <a href="/faq" class="nav-link">FAQ</a>
       <a href="/learn" class="nav-link">Learn</a>
       <a href="/dangote-ipo" class="nav-link">Dangote IPO</a>
-      <span class="nav-link" style="color:var(--gold); font-weight:700; opacity:1; cursor:default;">Open BGL Account</span>
+      <a href="/open-account" class="btn btn-ghost">Open BGL Account</a>
       <a href="https://whatsapp.com/channel/0029VbDBs7b2P59tpMSe8D2L" target="_blank" rel="noopener" class="btn btn-ghost">Join the community</a>
       <button class="btn btn-primary" onclick="openWaitlist()">Join the waitlist</button>
     </div>
@@ -424,45 +424,37 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <img src="/assets/BGL_Logo.png" alt="BGL Securities">
       <span class="eyebrow" style="margin:0;">Powered by BGL Securities</span>
     </div>
-    <h1>Open an account with BGL</h1>
-    <p class="lead">Start investing in Nigerian stocks in a few guided steps. Choose Individual, Joint, or Corporate — you'll need a valid ID, a recent utility bill, and a passport photograph on hand.</p>
+    <h1>Track your application</h1>
+    <p class="lead">Enter your application reference and the email you applied with to see where things stand.</p>
   </div>
 </header>
 
 <div class="container">
-  <div class="aow-panel">
+  <div class="aow-panel" style="max-width:560px;">
 
-    <!-- ENTRY -->
-    <div id="aowEntry">
-      <h2>Ready to begin?</h2>
-      <p>The application takes about 10 minutes. You can go back and edit any step before submitting.</p>
-      <button class="btn btn-primary" onclick="startWizard()">Open an Account with BGL</button>
-    </div>
-
-    <!-- WIZARD -->
-    <div id="aowWizard" style="display:none;">
-      <div class="aow-rail" id="aowRail"></div>
-      <div class="aow-rail-label" id="aowRailLabel"></div>
-      <form id="aowForm" onsubmit="return false;">
-        <div id="aowStepBody"></div>
-        <div class="aow-nav-row">
-          <button type="button" class="btn btn-ghost" id="aowBackBtn" onclick="goBack()">Back</button>
-          <button type="button" class="btn btn-primary" id="aowNextBtn" onclick="goNext()">Continue</button>
-        </div>
-      </form>
-    </div>
-
-    <!-- SUCCESS -->
-    <div id="aowSuccess" style="display:none;">
-      <div class="success-check">✓</div>
-      <h2>Application received</h2>
-      <p>We've sent your account opening request to the BGL team for review.</p>
-      <div class="ref-pill" id="aowRefPill">BGL-00000000-0000</div>
-      <p>We'll email you at <strong id="aowRefEmail"></strong> as your application progresses.</p>
-      <div style="display:flex; gap:10px; justify-content:center; margin-top:20px; flex-wrap:wrap;">
-        <a class="btn btn-primary" id="aowTrackLink" href="/track-application">Track your application</a>
-        <button class="btn btn-ghost" onclick="location.reload()">Start another application</button>
+    <div id="lookupForm">
+      <div class="field">
+        <label>Application reference</label>
+        <input type="text" id="trackRef" placeholder="BGL-20260902-4831">
       </div>
+      <div class="field">
+        <label>Email address</label>
+        <input type="email" id="trackEmail" placeholder="you@email.com">
+      </div>
+      <button class="btn btn-primary" style="width:100%; padding:14px; margin-top:8px;" id="trackBtn" onclick="checkStatus()">Check status</button>
+      <p id="trackError" style="display:none; color:var(--signal); font-size:13.5px; margin-top:14px;"></p>
+    </div>
+
+    <div id="resultPanel" style="display:none;">
+      <div class="review-group">
+        <h4>Application</h4>
+        <div class="review-row"><span>Reference</span><span id="resRef"></span></div>
+        <div class="review-row"><span>Submitted</span><span id="resSubmitted"></span></div>
+      </div>
+
+      <div id="statusSteps"></div>
+
+      <button class="btn btn-ghost" style="width:100%; margin-top:24px;" onclick="resetLookup()">Check another application</button>
     </div>
 
   </div>
@@ -517,7 +509,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     </div>
   </div>
 </footer>
-
 <!-- ===== Waitlist Modal (real markup + submission logic, unmodified) ===== -->
 <div class="modal-overlay" id="waitlistOverlay" onclick="if(event.target===this) closeWaitlist()">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="waitlistTitle">
@@ -662,578 +653,114 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <!-- /Brevo Conversations {/literal} -->
 
 <!-- ============================================================
-     ACCOUNT OPENING WIZARD
+     TRACK APPLICATION LOOKUP
      ============================================================ -->
 <script>
-const RISK_DISCLOSURE_URL = '/assets/Risk_Disclosure_Statement.pdf';
+  // Pre-fill the reference if arriving from an email link, e.g.
+  // /track-application?ref=BGL-20260902-4831
+  (function(){
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if(ref) document.getElementById('trackRef').value = ref;
+  })();
 
-const state = {
-  accountType: null,
-  primary: {},
-  jointPartner: {},
-  company: {},
-  signatory1: {},
-  signatory2: {},
-  banking: {},
-  account: {},
-  files: {}
-};
-
-let steps = [];
-let currentStep = 0;
-
-/* ---------- field renderers ---------- */
-function textField(prefix,key,label,required,span){
-  return `<div class="field ${span||''}">
-    <label>${label}${required?'<span class="req">*</span>':''}</label>
-    <input type="text" data-field="${prefix}.${key}" ${required?'data-required="true"':''}>
-    <div class="err-msg">This field is required.</div>
-  </div>`;
-}
-function textareaField(prefix,key,label,required,span){
-  return `<div class="field ${span||''}">
-    <label>${label}${required?'<span class="req">*</span>':''}</label>
-    <textarea data-field="${prefix}.${key}" ${required?'data-required="true"':''}></textarea>
-    <div class="err-msg">This field is required.</div>
-  </div>`;
-}
-function emailField(prefix,key,label,required){
-  return `<div class="field">
-    <label>${label}${required?'<span class="req">*</span>':''}</label>
-    <input type="email" data-field="${prefix}.${key}" ${required?'data-required="true"':''}>
-    <div class="err-msg">Enter a valid email address.</div>
-  </div>`;
-}
-function telField(prefix,key,label,required){
-  return `<div class="field">
-    <label>${label}${required?'<span class="req">*</span>':''}</label>
-    <input type="tel" data-field="${prefix}.${key}" ${required?'data-required="true"':''}>
-    <div class="err-msg">Enter a valid phone number.</div>
-  </div>`;
-}
-function dateField(prefix,key,label,required){
-  return `<div class="field">
-    <label>${label}${required?'<span class="req">*</span>':''}</label>
-    <input type="date" data-field="${prefix}.${key}" ${required?'data-required="true"':''}>
-    <div class="err-msg">This field is required.</div>
-  </div>`;
-}
-function selectField(prefix,key,label,options,required){
-  return `<div class="field">
-    <label>${label}${required?'<span class="req">*</span>':''}</label>
-    <select data-field="${prefix}.${key}" ${required?'data-required="true"':''}>
-      <option value="">Select</option>
-      ${options.map(o=>`<option value="${o}">${o}</option>`).join('')}
-    </select>
-    <div class="err-msg">Please make a selection.</div>
-  </div>`;
-}
-
-function referralField(prefix){
-  return `
-  <fieldset>
-    <legend>Referral</legend>
-    <div class="aow-grid single">
-      ${textField(prefix,'referredBy','Referred by / Relationship Manager (optional)',false,'full')}
-    </div>
-  </fieldset>`;
-}
-
-function personalFields(prefix){
-  return `
-  <fieldset>
-    <legend>Personal information</legend>
-    <div class="aow-grid">
-      ${selectField(prefix,'title','Title',['Mr','Mrs','Miss','Dr','Chief','Other'],true)}
-      ${selectField(prefix,'gender','Gender',['Male','Female'],true)}
-      ${textField(prefix,'surname','Surname',true,'full')}
-      ${textField(prefix,'otherNames','Other names',true,'full')}
-      ${dateField(prefix,'dob','Date of birth',true)}
-      ${textField(prefix,'occupation','Occupation',true)}
-      ${textField(prefix,'mothersMaidenName',"Mother's maiden name",true)}
-      ${textField(prefix,'nationality','Nationality',true)}
-      ${textField(prefix,'stateOfOrigin','State of origin',true)}
-      ${textField(prefix,'lga','Local government',true)}
-      ${textareaField(prefix,'residentialAddress','Residential address',true,'full')}
-      ${textareaField(prefix,'permanentAddress','Permanent address',true,'full')}
-      ${emailField(prefix,'email','Email address',true)}
-      ${telField(prefix,'phone','Phone number',true)}
-    </div>
-  </fieldset>`;
-}
-
-function pepFields(prefix){
-  return `
-  <fieldset>
-    <legend>Other disclosures</legend>
-    <div class="aow-grid single">
-      <div class="field">
-        <label>Are you, or have you ever been, a Politically Exposed Person (PEP)?<span class="req">*</span></label>
-        <div class="radio-row">
-          <label class="radio-opt"><input type="radio" name="${prefix}_pep" value="Yes" onchange="toggleConditional('${prefix}_pepRoleWrap', true)"> Yes</label>
-          <label class="radio-opt"><input type="radio" name="${prefix}_pep" value="No" onchange="toggleConditional('${prefix}_pepRoleWrap', false)"> No</label>
-        </div>
-      </div>
-      <div class="field" id="${prefix}_pepRoleWrap" style="display:none;">
-        <label>Role / position held</label>
-        <input type="text" data-field="${prefix}.pepRole">
-      </div>
-      <div class="field">
-        <label>Are you related to or closely associated with a PEP?<span class="req">*</span></label>
-        <div class="radio-row">
-          <label class="radio-opt"><input type="radio" name="${prefix}_pepRelated" value="Yes" onchange="toggleConditional('${prefix}_pepRelatedWrap', true)"> Yes</label>
-          <label class="radio-opt"><input type="radio" name="${prefix}_pepRelated" value="No" onchange="toggleConditional('${prefix}_pepRelatedWrap', false)"> No</label>
-        </div>
-      </div>
-      <div class="field" id="${prefix}_pepRelatedWrap" style="display:none;">
-        <label>Name of PEP and relationship</label>
-        <input type="text" data-field="${prefix}.pepRelation">
-      </div>
-    </div>
-  </fieldset>
-  <fieldset>
-    <legend>Indemnity</legend>
-    <div class="info-box">
-      I/We indemnify and hold BGL Securities Limited harmless against all and any risks, proceedings, suits, costs, damages and claims,
-      expenses, legal fees, liabilities and losses which BGL Securities Limited may become exposed to, suffer from, subjected to, incurred
-      or made against whether arising out of or in connection with the sales or purchase of stocks which could arise as a result of, but not
-      limited to fluctuations in market price, internet or mobile network transmission, mutilated, duplicated, illegible and altered
-      letter/mandate form, provision of incorrect bank details, delay in remittance of sales proceeds for any reason, late receipt of
-      mandates, errors from reliance on the information provided on the account opening document or module, signature specimen, and other
-      events of force majeure and other unforeseen natural events such as but not limited to fire, flood, war, riot urban unrest, terrorism,
-      epidemic and pandemic on my/our behalf.
-    </div>
-    <label class="check-row">
-      <input type="checkbox" data-field="${prefix}.indemnityAccepted" data-required="true">
-      I have read and agree to the indemnity terms above.
-    </label>
-  </fieldset>
-  <fieldset>
-    <legend>Risk disclosure</legend>
-    <p style="font-size:13.5px; color:rgba(22,36,26,0.65); margin:0 0 12px; line-height:1.55;">
-      Before proceeding, please read the
-      <a href="${RISK_DISCLOSURE_URL}" target="_blank" rel="noopener">Risk Disclosure Statement</a>,
-      which sets out the risks involved in securities trading.
-    </p>
-    <label class="check-row">
-      <input type="checkbox" data-field="${prefix}.riskDisclosureAccepted" data-required="true"
-        onchange="recordConsentTimestamp('${prefix}','riskDisclosureAcceptedAt', this.checked)">
-      I have read and understood the Risk Disclosure Statement and accept the risks described in it.
-    </label>
-  </fieldset>`;
-}
-
-function documentFields(prefix, extra){
-  let docs = [
-    {key:'validId', label:'Valid means of identification', hint:'National ID, passport, driver\u2019s licence or voter\u2019s card'},
-    {key:'utilityBill', label:'Utility bill', hint:'Proof of address, issued within the last 3 months'},
-    {key:'passportPhoto', label:'Passport photograph', hint:'Clear, front-facing photo'},
-    {key:'signature', label:'Signature', hint:'Photo or scan of your signature'}
-  ];
-  if(extra) docs = docs.concat(extra);
-  return `<fieldset><legend>Documents</legend>` +
-    docs.map(d => uploadField(prefix, d.key, d.label, d.hint)).join('') +
-    `</fieldset>`;
-}
-
-function uploadField(prefix, key, label, hint){
-  const id = `${prefix}_${key}`;
-  return `
-  <div class="upload" id="${id}_wrap">
-    <div class="upload-icon">📄</div>
-    <div class="upload-body">
-      <div class="upload-title">${label}<span class="req">*</span></div>
-      <div class="upload-hint" id="${id}_hint">${hint} · PNG, JPG or PDF</div>
-    </div>
-    <input type="file" id="${id}" accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf" onchange="handleFile('${prefix}','${key}', this, '${id}')">
-    <button type="button" class="upload-btn" onclick="document.getElementById('${id}').click()">Upload</button>
-  </div>`;
-}
-
-function handleFile(prefix, key, input, id){
-  const file = input.files[0];
-  if(!file) return;
-  const allowed = ['image/png','image/jpeg','application/pdf'];
-  if(!allowed.includes(file.type)){
-    alert('Please upload a PNG, JPG or PDF file.');
-    input.value = '';
-    return;
-  }
-  if(file.size > 5*1024*1024){
-    alert('File is larger than 5MB. Please upload a smaller file.');
-    input.value = '';
-    return;
-  }
-  if(!state.files[prefix]) state.files[prefix] = {};
-  state.files[prefix][key] = file;
-  const wrap = document.getElementById(id+'_wrap');
-  wrap.classList.add('has-file');
-  document.getElementById(id+'_hint').innerHTML = `<span class="upload-filename">${file.name}</span>`;
-}
-
-function toggleConditional(id, show){
-  document.getElementById(id).style.display = show ? 'flex' : 'none';
-}
-
-function recordConsentTimestamp(prefix, key, checked){
-  if(!state[prefix]) state[prefix] = {};
-  state[prefix][key] = checked ? new Date().toISOString() : null;
-}
-
-/* ---------- banking / company steps ---------- */
-function bankingStepHtml(){
-  return `
-  <h2 class="aow-step-title">Banking &amp; direct settlement</h2>
-  <p class="aow-step-sub">Used to settle proceeds from your investments. Your CSCS Clearing House Number (CHN) isn't needed yet — BGL assigns this once your account is opened.</p>
-  <fieldset>
-    <legend>Bank details</legend>
-    <div class="aow-grid">
-      ${textField('banking','bankName','Bank name',true)}
-      ${textField('banking','accountName','Account name',true)}
-      ${textField('banking','accountNumber','Account number',true)}
-      ${selectField('banking','sourceOfFunds','Source of funds',['Salary','Business income','Investments','Inheritance','Other'],true)}
-      <div class="field">
-        <label>Account type<span class="req">*</span></label>
-        <div class="radio-row">
-          <label class="radio-opt"><input type="radio" name="banking_accountType" value="Current" data-field-radio="banking.accountType"> Current</label>
-          <label class="radio-opt"><input type="radio" name="banking_accountType" value="Savings" data-field-radio="banking.accountType"> Savings</label>
-        </div>
-      </div>
-      ${textField('banking','bvn','BVN',true)}
-      ${textField('banking','nin','NIN',true)}
-      ${textField('banking','taxId','Tax ID (optional)',false)}
-      <div class="field">
-        <label>Opt in for CSCS Direct Settlement?<span class="req">*</span></label>
-        <div class="radio-row">
-          <label class="radio-opt"><input type="radio" name="banking_directSettlement" value="Yes" data-field-radio="banking.directSettlement"> Yes</label>
-          <label class="radio-opt"><input type="radio" name="banking_directSettlement" value="No" data-field-radio="banking.directSettlement"> No</label>
-        </div>
-      </div>
-    </div>
-  </fieldset>`;
-}
-
-function companyStepHtml(){
-  return `
-  <h2 class="aow-step-title">Company information</h2>
-  <p class="aow-step-sub">Details about the business opening this account.</p>
-  <fieldset>
-    <legend>Company details</legend>
-    <div class="aow-grid">
-      ${textField('company','companyName','Registered company name',true,'full')}
-      ${textField('company','rcNumber','RC number (CAC)',true)}
-      ${textField('company','businessType','Business type',true)}
-      ${textareaField('company','businessAddress','Business address',true,'full')}
-      ${textField('company','state','State',true)}
-      ${textField('company','country','Country',true)}
-      ${emailField('company','email','Company email',true)}
-      ${telField('company','phone','Company phone',true)}
-      ${textField('company','natureOfBusiness','Nature of business',true)}
-      ${selectField('company','sourceOfFunds','Source of funds',['Business income','Investments','Shareholder capital','Other'],true)}
-      ${textField('company','tin','Tax ID (TIN)',true)}
-    </div>
-  </fieldset>`;
-}
-
-function corporateDocsStepHtml(){
-  return `
-  <h2 class="aow-step-title">Corporate documents</h2>
-  <p class="aow-step-sub">Upload supporting documents for the company. Items marked "if applicable" only apply to some businesses.</p>
-  ${uploadField('company','cacCert','CAC certificate','Certificate of incorporation')}
-  ${uploadField('company','moa','Memorandum &amp; Articles of Association','Or equivalent incorporation document')}
-  ${uploadField('company','tinDoc','Tax/TIN documentation','')}
-  ${uploadField('company','utilityBill','Utility bill (company address)','Issued within the last 3 months')}
-  ${uploadField('company','boardResolution','Board resolution / mandate','If applicable')}
-  ${uploadField('company','companySeal','Company seal / stamped signature page','If applicable')}
-  `;
-}
-
-function jointPartnerStepHtml(){
-  return `<h2 class="aow-step-title">Joint account partner</h2>
-  <p class="aow-step-sub">Tell us about the second account holder.</p>
-  <fieldset>
-    <legend>Partner details</legend>
-    <div class="aow-grid">
-      ${textField('jointPartner','name','Full name',true,'full')}
-      ${selectField('jointPartner','relationship','Relationship to primary holder',['Spouse','Sibling','Business partner','Other'],true)}
-      ${selectField('jointPartner','idType','ID type',['International passport','Driver\\u2019s licence','National ID','Other'],true)}
-      ${textField('jointPartner','idNumber','ID number',true)}
-      ${dateField('jointPartner','idExpiry','ID expiry date',false)}
-      ${dateField('jointPartner','dob','Date of birth',true)}
-      ${telField('jointPartner','phone','Phone number',true)}
-      ${telField('jointPartner','altPhone','Alternate phone number',false)}
-      ${textField('jointPartner','stateOrigin','State of origin / LGA',true)}
-      ${textareaField('jointPartner','address','Residential address',true,'full')}
-      ${emailField('jointPartner','email','Email address',true)}
-    </div>
-  </fieldset>`;
-}
-
-/* ---------- review ---------- */
-function reviewStepHtml(){
-  const f = state;
-  let html = `<h2 class="aow-step-title">Review &amp; submit</h2>
-  <p class="aow-step-sub">Check your details below before submitting to BGL.</p>`;
-
-  html += reviewGroup('Account type', [
-    ['Type', capitalize(f.accountType)],
-    ['Referred by / Relationship Manager', f.account ? f.account.referredBy : '']
-  ]);
-
-  if(f.accountType === 'individual' || f.accountType === 'joint'){
-    html += personReviewGroup('Primary account holder', f.primary, 1);
-  }
-  if(f.accountType === 'joint'){
-    html += `<div class="review-group"><h4>Joint account partner <span class="edit-link" onclick="jumpToStep(2)">Edit</span></h4>
-      ${reviewRow('Name', f.jointPartner.name)}
-      ${reviewRow('Relationship', f.jointPartner.relationship)}
-      ${reviewRow('Email', f.jointPartner.email)}
-      ${reviewRow('Phone', f.jointPartner.phone)}
-    </div>`;
-  }
-  if(f.accountType === 'corporate'){
-    html += `<div class="review-group"><h4>Company <span class="edit-link" onclick="jumpToStep(1)">Edit</span></h4>
-      ${reviewRow('Company name', f.company.companyName)}
-      ${reviewRow('RC number', f.company.rcNumber)}
-      ${reviewRow('TIN', f.company.tin)}
-      ${reviewRow('Email', f.company.email)}
-    </div>`;
-    html += personReviewGroup('Authorised signatory 1', f.signatory1, 2);
-    html += personReviewGroup('Authorised signatory 2', f.signatory2, 3);
+  function escapeHtml(str){
+    if(str === undefined || str === null) return '';
+    return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  html += `<div class="review-group"><h4>Banking <span class="edit-link" onclick="jumpToStep(getBankingStepIndex())">Edit</span></h4>
-    ${reviewRow('Bank', f.banking.bankName)}
-    ${reviewRow('Account number', f.banking.accountNumber)}
-    ${reviewRow('Account type', f.banking.accountType)}
-    ${reviewRow('Direct settlement', f.banking.directSettlement)}
-  </div>`;
+  async function checkStatus(){
+    const ref = document.getElementById('trackRef').value.trim();
+    const email = document.getElementById('trackEmail').value.trim();
+    const errEl = document.getElementById('trackError');
+    const btn = document.getElementById('trackBtn');
+    errEl.style.display = 'none';
 
-  const fileCount = Object.values(state.files).reduce((sum,group)=> sum + Object.keys(group).length, 0);
-  html += `<div class="review-group"><h4>Documents</h4>
-    ${reviewRow('Files uploaded', fileCount + ' document(s)')}
-  </div>`;
-
-  return html;
-}
-
-function personReviewGroup(title, obj, stepIndex){
-  return `<div class="review-group"><h4>${title} <span class="edit-link" onclick="jumpToStep(${stepIndex})">Edit</span></h4>
-    ${reviewRow('Name', [obj.title, obj.surname, obj.otherNames].filter(Boolean).join(' '))}
-    ${reviewRow('Email', obj.email)}
-    ${reviewRow('Phone', obj.phone)}
-    ${reviewRow('Occupation', obj.occupation)}
-    ${reviewRow('Risk disclosure accepted', obj.riskDisclosureAccepted ? 'Yes, ' + new Date(obj.riskDisclosureAcceptedAt).toLocaleString() : 'No')}
-  </div>`;
-}
-function reviewGroup(title, rows){
-  return `<div class="review-group"><h4>${title}</h4>${rows.map(r=>reviewRow(r[0],r[1])).join('')}</div>`;
-}
-function reviewRow(label, value){
-  return `<div class="review-row"><span>${label}</span><span>${value || '—'}</span></div>`;
-}
-function capitalize(s){ return s ? s.charAt(0).toUpperCase()+s.slice(1) : ''; }
-function getBankingStepIndex(){ return steps.findIndex(s=>s.id==='banking'); }
-function jumpToStep(i){ currentStep = i; renderStep(); }
-
-/* ---------- account type step ---------- */
-function typeStepHtml(){
-  const types = [
-    {id:'individual', title:'Individual', desc:'For investors opening an account in their own name.'},
-    {id:'joint', title:'Joint', desc:'For two individuals opening an account together.'},
-    {id:'corporate', title:'Corporate', desc:'For businesses, companies and other corporate entities.'}
-  ];
-  return `<h2 class="aow-step-title">Choose account type</h2>
-  <p class="aow-step-sub">This determines the information we'll ask for next.</p>
-  <div class="type-grid">
-    ${types.map(t=>`
-      <div class="type-card ${state.accountType===t.id?'selected':''}" onclick="selectType('${t.id}')">
-        <div><h3>${t.title}</h3><p>${t.desc}</p></div>
-        <div class="type-check"></div>
-      </div>`).join('')}
-  </div>`;
-}
-
-/* ---------- step config ---------- */
-function buildSteps(type){
-  const s = [{id:'type', title:'Choose account type', render: typeStepHtml}];
-
-  if(type === 'individual'){
-    s.push({id:'primary', title:'Personal information', render: ()=>personalFields('primary') + referralField('account') });
-    s.push({id:'banking', title:'Banking', render: bankingStepHtml });
-    s.push({id:'pep', title:'Disclosures', render: ()=>pepFields('primary') });
-    s.push({id:'docs', title:'Documents', render: ()=>documentFields('primary') });
-  } else if(type === 'joint'){
-    s.push({id:'primary', title:'Primary holder', render: ()=>`<p class="aow-step-sub" style="margin-top:-20px;">Tell us about the first account holder.</p>` + personalFields('primary') + referralField('account') });
-    s.push({id:'partner', title:'Joint partner', render: jointPartnerStepHtml });
-    s.push({id:'banking', title:'Banking', render: bankingStepHtml });
-    s.push({id:'pep', title:'Disclosures', render: ()=>pepFields('primary') });
-    s.push({id:'docs', title:'Documents', render: ()=>`<h2 class="aow-step-title">Documents</h2><p class="aow-step-sub">Upload documents for both account holders.</p>` +
-      `<p style="font-weight:600;font-size:13px;color:rgba(22,36,26,0.6);margin:0 0 8px;">Primary holder</p>` + documentFields('primary') +
-      `<p style="font-weight:600;font-size:13px;color:rgba(22,36,26,0.6);margin:24px 0 8px;">Joint partner</p>` + documentFields('jointPartner') });
-  } else if(type === 'corporate'){
-    s.push({id:'company', title:'Company information', render: ()=>companyStepHtml() + referralField('account') });
-    s.push({id:'sig1', title:'Signatory 1', render: ()=>`<h2 class="aow-step-title">Authorised signatory 1</h2><p class="aow-step-sub">One of two people authorised to operate this account.</p>` + personalFields('signatory1') + pepFields('signatory1') });
-    s.push({id:'sig2', title:'Signatory 2', render: ()=>`<h2 class="aow-step-title">Authorised signatory 2</h2><p class="aow-step-sub">The second authorised signatory.</p>` + personalFields('signatory2') + pepFields('signatory2') });
-    s.push({id:'banking', title:'Banking', render: bankingStepHtml });
-    s.push({id:'docs', title:'Documents', render: ()=>`<h2 class="aow-step-title">Documents</h2><p class="aow-step-sub">Upload company and signatory documents.</p>` +
-      `<p style="font-weight:600;font-size:13px;color:rgba(22,36,26,0.6);margin:0 0 8px;">Signatory 1</p>` + documentFields('signatory1') +
-      `<p style="font-weight:600;font-size:13px;color:rgba(22,36,26,0.6);margin:24px 0 8px;">Signatory 2</p>` + documentFields('signatory2') +
-      corporateDocsStepHtml() });
-  }
-  s.push({id:'review', title:'Review & submit', render: reviewStepHtml });
-  return s;
-}
-
-/* ---------- wizard engine ---------- */
-function startWizard(){
-  document.getElementById('aowEntry').style.display = 'none';
-  document.getElementById('aowWizard').style.display = 'block';
-  steps = buildSteps(null);
-  currentStep = 0;
-  renderStep();
-}
-
-function selectType(type){
-  state.accountType = type;
-  steps = buildSteps(type);
-  renderStep();
-}
-
-function renderRail(){
-  const rail = document.getElementById('aowRail');
-  rail.innerHTML = steps.map((s,i)=>{
-    let cls = 'aow-rail-seg';
-    if(i < currentStep) cls += ' done';
-    if(i === currentStep) cls += ' active';
-    return `<div class="${cls}"></div>`;
-  }).join('');
-  document.getElementById('aowRailLabel').textContent = `Step ${currentStep+1} of ${steps.length} · ${steps[currentStep].title}`;
-}
-
-function renderStep(){
-  renderRail();
-  document.getElementById('aowStepBody').innerHTML = steps[currentStep].render();
-  hydrateFields();
-  document.getElementById('aowBackBtn').style.visibility = currentStep === 0 ? 'hidden' : 'visible';
-  document.getElementById('aowNextBtn').textContent = currentStep === steps.length - 1 ? 'Submit application' : 'Continue';
-  window.scrollTo({top: document.getElementById('aowWizard').offsetTop - 100, behavior:'smooth'});
-}
-
-function hydrateFields(){
-  document.querySelectorAll('[data-field]').forEach(el=>{
-    const [group,key] = el.dataset.field.split('.');
-    const store = state[group] || {};
-    if(store[key] !== undefined){
-      if(el.type === 'checkbox') el.checked = store[key];
-      else el.value = store[key];
+    if(!ref || !email){
+      errEl.textContent = 'Please enter both your application reference and email.';
+      errEl.style.display = 'block';
+      return;
     }
-  });
-  document.querySelectorAll('[data-field-radio]').forEach(el=>{
-    const [group,key] = el.dataset.fieldRadio.split('.');
-    const store = state[group] || {};
-    if(store[key] === el.value) el.checked = true;
-  });
-}
 
-function collectStep(){
-  let valid = true;
-  document.querySelectorAll('[data-field]').forEach(el=>{
-    const [group,key] = el.dataset.field.split('.');
-    if(!state[group]) state[group] = {};
-    const val = el.type === 'checkbox' ? el.checked : el.value.trim();
-    state[group][key] = val;
-    const isRequired = el.dataset.required === 'true';
-    const fieldWrap = el.closest('.field');
-    const empty = !val;
-    if(isRequired && empty){
-      valid = false;
-      if(fieldWrap) fieldWrap.classList.add('invalid');
-    } else if(fieldWrap){
-      fieldWrap.classList.remove('invalid');
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+
+    try{
+      const res = await fetch('/.netlify/functions/track-application', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reference: ref, email: email })
+      });
+      const result = await res.json();
+
+      if(!res.ok){
+        errEl.textContent = result.error || "We couldn't find an application matching that reference and email.";
+        errEl.style.display = 'block';
+        return;
+      }
+
+      renderResult(result);
+    } catch(err){
+      errEl.textContent = 'Something went wrong. Please try again in a moment.';
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Check status';
     }
-  });
-  document.querySelectorAll('[data-field-radio]:checked').forEach(el=>{
-    const [group,key] = el.dataset.fieldRadio.split('.');
-    if(!state[group]) state[group] = {};
-    state[group][key] = el.value;
-  });
-  return valid;
-}
-
-function goNext(){
-  const stepId = steps[currentStep].id;
-
-  if(stepId === 'type'){
-    if(!state.accountType){ alert('Please choose an account type to continue.'); return; }
-  } else {
-    const ok = collectStep();
-    if(!ok){ return; }
   }
 
-  if(currentStep === steps.length - 1){
-    submitApplication();
-    return;
-  }
-  currentStep++;
-  renderStep();
-}
+  function renderResult(data){
+    document.getElementById('lookupForm').style.display = 'none';
+    document.getElementById('resultPanel').style.display = 'block';
+    document.getElementById('resRef').textContent = data.applicationReference;
+    document.getElementById('resSubmitted').textContent = new Date(data.submittedAt).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
 
-function goBack(){
-  if(currentStep === 0) return;
-  currentStep--;
-  renderStep();
-}
+    const steps = [
+      { key: 'submitted', label: 'Application received' },
+      { key: 'under_review', label: 'Under review' },
+      { key: 'final', label: data.status === 'rejected' ? 'Requires attention' : 'Account opened' }
+    ];
 
-/* ---------- submission ---------- */
-async function submitApplication(){
-  const nextBtn = document.getElementById('aowNextBtn');
-  nextBtn.disabled = true;
-  nextBtn.textContent = 'Submitting…';
+    const statusOrder = ['submitted', 'under_review', 'opened', 'rejected'];
+    const currentIndex = statusOrder.indexOf(data.status);
 
-  const fd = new FormData();
-  fd.append('accountType', state.accountType);
-  fd.append('data', JSON.stringify({
-    primary: state.primary,
-    jointPartner: state.jointPartner,
-    company: state.company,
-    signatory1: state.signatory1,
-    signatory2: state.signatory2,
-    banking: state.banking,
-    account: state.account
-  }));
-  Object.entries(state.files).forEach(([person, docs])=>{
-    Object.entries(docs).forEach(([docKey, file])=>{
-      fd.append(`file__${person}__${docKey}`, file, file.name);
+    let html = '<div class="review-group"><h4>Status</h4>';
+    steps.forEach((step, i) => {
+      let reached;
+      if(step.key === 'submitted') reached = currentIndex >= 0;
+      else if(step.key === 'under_review') reached = currentIndex >= 1;
+      else reached = currentIndex >= 2;
+
+      const isRejectedFinal = step.key === 'final' && data.status === 'rejected';
+      const mark = reached ? (isRejectedFinal ? '!' : '✓') : '—';
+      const color = reached ? (isRejectedFinal ? 'var(--signal)' : 'var(--green)') : 'rgba(22,36,26,0.3)';
+
+      html += `<div class="review-row">
+        <span style="color:${color}; font-weight:700;">${mark} ${escapeHtml(step.label)}</span>
+        <span></span>
+      </div>`;
     });
-  });
+    html += '</div>';
 
-  try{
-    const res = await fetch('/.netlify/functions/submit-application', {
-      method: 'POST',
-      body: fd
-    });
-    const result = await res.json();
-    showSuccess(result.applicationReference || 'BGL-PENDING', getApplicantEmail());
-  } catch(err){
-    console.warn('submit-application endpoint not available yet:', err);
-    const mockRef = 'BGL-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + Math.floor(1000+Math.random()*9000);
-    showSuccess(mockRef, getApplicantEmail());
+    if(data.status === 'opened' && data.chn){
+      html += `<div class="review-group"><h4>Account details</h4>
+        <div class="review-row"><span>CHN</span><span>${escapeHtml(data.chn)}</span></div>
+      </div>`;
+    }
+    if(data.status === 'rejected' && data.rejectionReason){
+      html += `<div class="review-group"><h4>Reason</h4>
+        <p style="font-size:13.5px; color:rgba(22,36,26,0.7); line-height:1.6;">${escapeHtml(data.rejectionReason)}</p>
+      </div>`;
+    }
+
+    document.getElementById('statusSteps').innerHTML = html;
   }
-}
 
-function getApplicantEmail(){
-  if(state.accountType === 'corporate') return state.company.email || state.signatory1.email;
-  return state.primary.email;
-}
-
-function showSuccess(ref, email){
-  document.getElementById('aowWizard').style.display = 'none';
-  document.getElementById('aowSuccess').style.display = 'block';
-  document.getElementById('aowRefPill').textContent = ref;
-  document.getElementById('aowRefEmail').textContent = email || 'your email';
-  document.getElementById('aowTrackLink').href = '/track-application?ref=' + encodeURIComponent(ref);
-}
+  function resetLookup(){
+    document.getElementById('resultPanel').style.display = 'none';
+    document.getElementById('lookupForm').style.display = 'block';
+    document.getElementById('trackEmail').value = '';
+  }
 </script>
 </body>
 </html>

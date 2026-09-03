@@ -12,6 +12,8 @@ Static site for Tipping Point (BGL Securities' digital investment platform), cur
 /learn            → Learn hub (placeholder — see "Learn page" below)
 /open-account     → BGL account opening wizard (Individual/Joint/Corporate) — see
                     "Account opening" below
+/track-application → Public status lookup for a submitted application
+                    (reference + email) — see "Account opening" below
 ```
 
 Each page is a self-contained `index.html` (or `<name>.html` at root, which Netlify
@@ -114,8 +116,18 @@ other page, so it's a normal Netlify-served page like `/faq` or
     straight from the browser. Run `supabase/admin_policies.sql` once
     (after `schema.sql`) to grant the authenticated admin session
     read-only access to these tables and to the document storage bucket.
-  - Still to build: a public "track your application" page for
-    applicants (reference + email lookup).
+- **Tracking**: `/track-application` is a public page (no login) where
+  an applicant enters their application reference and the email they
+  applied with to see a simple status tracker (Submitted → Under review
+  → Opened/Rejected, with the CHN or rejection reason shown once
+  available). It's linked from the `/open-account` success screen and
+  from every status-change email. It's backed by its own function,
+  `netlify/functions/track-application.js`, rather than reading
+  Supabase directly from the browser — both the reference **and** the
+  email must match together, and a mismatch on either returns the same
+  generic "not found" response, so the endpoint can't be used to
+  enumerate applications or confirm whether a given reference exists.
+  It only ever returns status fields, never the full applicant record.
 - **Consent tracking**: the PEP/indemnity/risk-disclosure checkboxes on
   the Disclosures step record the exact client-side timestamp at the
   moment each box is checked (not the later submission time), and this
