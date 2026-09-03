@@ -1,0 +1,10 @@
+{
+  "name": "tipping-point-account-opening-backend",
+  "version": "1.0.0",
+  "description": "Netlify Functions backend for the Tipping Point x BGL Securities account opening feature.",
+  "private": true,
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "busboy": "^1.6.0"
+  }
+}

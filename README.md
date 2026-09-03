@@ -76,17 +76,36 @@ other page, so it's a normal Netlify-served page like `/faq` or
   correctly regardless of the page's folder depth.
 - **Submission**: the form posts to `/.netlify/functions/submit-application`
   (multipart form data — all field values as JSON plus the uploaded
-  files). That function isn't part of this repo yet; until it's added
-  and deployed, submission falls back to a mocked success screen with a
-  locally generated reference so the flow can be reviewed end-to-end.
-  See the separate backend project (Netlify Functions + Supabase +
-  Brevo) for the submission handler, database schema, and email
-  templates.
+  files). The function lives in `netlify/functions/submit-application.js`,
+  writes to Supabase (schema in `supabase/schema.sql`), uploads documents
+  to a private Supabase Storage bucket, and sends branded Brevo emails
+  (internal alert + applicant confirmation). If the request fails for any
+  reason (e.g. required environment variables aren't set yet), the
+  frontend falls back to a mocked success screen so the flow can still be
+  reviewed end-to-end.
+  - **Requires a Git-connected deploy, not drag-and-drop.** Netlify's
+    manual drag-and-drop deploy only publishes static files — it does
+    not deploy functions. This site must be deployed via a Git-connected
+    Netlify site (or the Netlify CLI) for `submit-application` to run.
+  - **Environment variables** (set in Netlify → Site settings →
+    Environment variables): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
+    `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`,
+    `LOGO_URL`, `SITE_URL`. See `netlify/functions/utils/brevo.js` for
+    how these are used.
+  - **Supabase setup**: run `supabase/schema.sql` once against a Supabase
+    project's SQL editor, and create a private Storage bucket named
+    `application-documents`. If `schema.sql` was already run before the
+    Risk Disclosure consent fields existed, run
+    `supabase/migration_risk_disclosure.sql` instead of re-running the
+    whole schema.
+  - Still to build: a status-update function for the admin dashboard
+    (`submitted → under_review → opened/rejected`), the admin dashboard
+    UI itself, and a public "track your application" page.
 - **Consent tracking**: the PEP/indemnity/risk-disclosure checkboxes on
   the Disclosures step record the exact client-side timestamp at the
-  moment each box is checked (not the later submission time), so that
-  timestamp travels with the submitted data once the backend is wired
-  up.
+  moment each box is checked (not the later submission time), and this
+  timestamp is stored as given rather than overwritten with the server's
+  submission time.
 - **Nav entry point**: every page's nav includes an "Open an Account"
   link to `/open-account` (styled as a `.btn.btn-ghost`, next to "Join
   the community"). On `/open-account` itself, that same nav-cta slot
@@ -95,7 +114,16 @@ other page, so it's a normal Netlify-served page like `/faq` or
 
 ## Deploying
 
-This repo deploys to Netlify as a static site — no build command needed,
-publish directory is the repo root. Folder-based pages (`/waitlist`,
-`/dangote-ipo`, `/learn`) rely on their `index.html` files for clean URLs, so
-keep that structure intact.
+This repo deploys to Netlify — publish directory is the repo root, no
+build command needed (see `netlify.toml`). Folder-based pages (`/waitlist`,
+`/dangote-ipo`, `/learn`, `/open-account`) rely on their `index.html` files
+for clean URLs, so keep that structure intact.
+
+As of the account opening feature, this site must be deployed via a
+**Git-connected Netlify site** (Netlify → Site settings → Build & deploy →
+Link to a Git repository), not the manual drag-and-drop dropzone — the
+`submit-application` function under `netlify/functions/` only deploys
+through a Git-connected build (or the Netlify CLI), never through
+drag-and-drop. Once connected, every `git push` to `main` deploys
+automatically.
+
