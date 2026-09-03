@@ -445,6 +445,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div class="aow-rail-label" id="aowRailLabel"></div>
       <form id="aowForm" onsubmit="return false;">
         <div id="aowStepBody"></div>
+        <p id="aowSubmitError" style="display:none; color:var(--signal); font-size:13.5px; margin-top:16px; line-height:1.5;"></p>
         <div class="aow-nav-row">
           <button type="button" class="btn btn-ghost" id="aowBackBtn" onclick="goBack()">Back</button>
           <button type="button" class="btn btn-primary" id="aowNextBtn" onclick="goNext()">Continue</button>
@@ -1188,6 +1189,8 @@ function goBack(){
 /* ---------- submission ---------- */
 async function submitApplication(){
   const nextBtn = document.getElementById('aowNextBtn');
+  const errorEl = document.getElementById('aowSubmitError');
+  errorEl.style.display = 'none';
   nextBtn.disabled = true;
   nextBtn.textContent = 'Submitting…';
 
@@ -1214,11 +1217,24 @@ async function submitApplication(){
       body: fd
     });
     const result = await res.json();
-    showSuccess(result.applicationReference || 'BGL-PENDING', getApplicantEmail());
+
+    if(!res.ok){
+      // The function responded, but with an error — this is NOT a
+      // success, and must never be shown as one. Surface the real
+      // message so the applicant (and whoever's debugging) sees it.
+      throw new Error(result.error || `Submission failed (status ${res.status}).`);
+    }
+    if(!result.applicationReference){
+      throw new Error('The server did not return an application reference. Please try again.');
+    }
+
+    showSuccess(result.applicationReference, getApplicantEmail());
   } catch(err){
-    console.warn('submit-application endpoint not available yet:', err);
-    const mockRef = 'BGL-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + Math.floor(1000+Math.random()*9000);
-    showSuccess(mockRef, getApplicantEmail());
+    console.error('submit-application failed:', err);
+    errorEl.textContent = 'We could not submit your application: ' + err.message + ' Please try again, or contact clientservices@bglafrica.com if this keeps happening.';
+    errorEl.style.display = 'block';
+    nextBtn.disabled = false;
+    nextBtn.textContent = 'Submit application';
   }
 }
 
