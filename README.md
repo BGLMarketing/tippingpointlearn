@@ -10,6 +10,8 @@ Static site for Tipping Point (BGL Securities' digital investment platform), cur
 /waitlist         → standalone waitlist form (shareable link, e.g. for ads/social bio)
 /dangote-ipo      → Dangote Refinery IPO campaign page (FAQ, 3-channel steps, waitlist)
 /learn            → Learn hub (placeholder — see "Learn page" below)
+/open-account     → BGL account opening wizard (Individual/Joint/Corporate) — see
+                    "Account opening" below
 ```
 
 Each page is a self-contained `index.html` (or `<name>.html` at root, which Netlify
@@ -55,6 +57,41 @@ on the `articles` table, not just by the frontend hiding them.
   used to set this up (title, slug, excerpt, content, status, timestamps).
   If the project is ever rebuilt, re-run that same SQL against a fresh
   Supabase project and update `supabase-config.js` with its new URL/key.
+
+## Account opening
+
+`/open-account` is a multi-step wizard for opening a BGL Securities
+brokerage account — Individual, Joint, or Corporate — built from BGL's
+actual KYC and CSCS Direct Settlement paper forms. It reuses the site's
+shared brand CSS (`:root` variables, fonts, `.btn`/`.field`/`.modal`
+classes) and includes the same nav, footer, and waitlist modal as every
+other page, so it's a normal Netlify-served page like `/faq` or
+`/waitlist`.
+
+- **Assets**: `assets/BGL_Logo.png` (shown as a small badge under the
+  page's eyebrow, since this flow is BGL-branded specifically) and
+  `assets/Risk_Disclosure_Statement.pdf` (linked from the Risk
+  Disclosure consent checkbox on the Disclosures step). Both are
+  referenced with root-relative paths (`/assets/...`), so they resolve
+  correctly regardless of the page's folder depth.
+- **Submission**: the form posts to `/.netlify/functions/submit-application`
+  (multipart form data — all field values as JSON plus the uploaded
+  files). That function isn't part of this repo yet; until it's added
+  and deployed, submission falls back to a mocked success screen with a
+  locally generated reference so the flow can be reviewed end-to-end.
+  See the separate backend project (Netlify Functions + Supabase +
+  Brevo) for the submission handler, database schema, and email
+  templates.
+- **Consent tracking**: the PEP/indemnity/risk-disclosure checkboxes on
+  the Disclosures step record the exact client-side timestamp at the
+  moment each box is checked (not the later submission time), so that
+  timestamp travels with the submitted data once the backend is wired
+  up.
+- **Nav entry point**: every page's nav includes an "Open an Account"
+  link to `/open-account` (styled as a `.btn.btn-ghost`, next to "Join
+  the community"). On `/open-account` itself, that same nav-cta slot
+  becomes a static, non-clickable label — the same pattern used for
+  "Learn" and "Dangote IPO" on their own pages.
 
 ## Deploying
 
