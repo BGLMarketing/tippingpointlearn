@@ -14,27 +14,36 @@
 -- trail, validation rules, and Brevo emails stay server-side and
 -- can't be skipped by calling Supabase directly from the browser.
 -- That's why there are no insert/update/delete policies here.
+--
+-- Safe to run more than once: each policy is dropped first (if it
+-- exists) before being recreated, since Postgres has no
+-- "create policy if not exists".
 
+drop policy if exists "Authenticated can read applications" on account_opening_applications;
 create policy "Authenticated can read applications"
   on account_opening_applications for select
   to authenticated
   using (true);
 
+drop policy if exists "Authenticated can read applicants" on applicants;
 create policy "Authenticated can read applicants"
   on applicants for select
   to authenticated
   using (true);
 
+drop policy if exists "Authenticated can read corporate profiles" on corporate_profiles;
 create policy "Authenticated can read corporate profiles"
   on corporate_profiles for select
   to authenticated
   using (true);
 
+drop policy if exists "Authenticated can read application documents" on application_documents;
 create policy "Authenticated can read application documents"
   on application_documents for select
   to authenticated
   using (true);
 
+drop policy if exists "Authenticated can read status history" on application_status_history;
 create policy "Authenticated can read status history"
   on application_status_history for select
   to authenticated
@@ -46,6 +55,7 @@ create policy "Authenticated can read status history"
 -- them. The bucket itself stays private — this only opens read
 -- access to logged-in admins, not the public.
 -- ------------------------------------------------------------
+drop policy if exists "Authenticated can read application documents storage" on storage.objects;
 create policy "Authenticated can read application documents storage"
   on storage.objects for select
   to authenticated
