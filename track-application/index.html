@@ -686,7 +686,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     btn.textContent = 'Checking…';
 
     try{
-      const res = await fetch('/.netlify/functions/track-application', {
+      const res = await fetch('/api/track-application', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reference: ref, email: email })

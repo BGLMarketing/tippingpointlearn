@@ -3,3 +3,13 @@
 # while keeping /learn/article.html available directly for any
 # existing links that use the old ?slug= query string format.
 /learn/:slug  /learn/article.html  200
+
+# Platform-neutral function paths. The frontend calls /api/* (matching
+# Vercel's native convention) rather than /.netlify/functions/* directly,
+# so the same frontend code works unmodified on whichever platform is
+# currently live. On Netlify, this redirect routes those calls to the
+# actual functions in netlify/functions/.
+/api/submit-application         /.netlify/functions/submit-application         200
+/api/create-upload-url          /.netlify/functions/create-upload-url          200
+/api/update-application-status  /.netlify/functions/update-application-status  200
+/api/track-application           /.netlify/functions/track-application          200

@@ -1300,7 +1300,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
   async function callStatusUpdate(payload){
     const token = await getAuthToken();
-    const res = await fetch('/.netlify/functions/update-application-status', {
+    const res = await fetch('/api/update-application-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify(payload)

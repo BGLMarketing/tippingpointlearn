@@ -926,7 +926,7 @@ async function handleFile(prefix, key, input, id){
   hintEl.textContent = 'Uploading…';
 
   try{
-    const urlRes = await fetch('/.netlify/functions/create-upload-url', {
+    const urlRes = await fetch('/api/create-upload-url', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1316,7 +1316,7 @@ async function submitApplication(){
   };
 
   try{
-    const res = await fetch('/.netlify/functions/submit-application', {
+    const res = await fetch('/api/submit-application', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)

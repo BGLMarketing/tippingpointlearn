@@ -163,8 +163,41 @@ for clean URLs, so keep that structure intact.
 As of the account opening feature, this site must be deployed via a
 **Git-connected Netlify site** (Netlify → Site settings → Build & deploy →
 Link to a Git repository), not the manual drag-and-drop dropzone — the
-`submit-application` function under `netlify/functions/` only deploys
-through a Git-connected build (or the Netlify CLI), never through
-drag-and-drop. Once connected, every `git push` to `main` deploys
-automatically.
+functions under `netlify/functions/` only deploy through a Git-connected
+build (or the Netlify CLI), never through drag-and-drop. Once connected,
+every `git push` to `main` deploys automatically.
 
+### Runs on Netlify or Vercel, without code changes
+
+This repo supports **both** platforms simultaneously:
+
+- **Netlify**: functions live in `netlify/functions/`, configured via
+  `netlify.toml`.
+- **Vercel**: the same functions are duplicated (in Vercel's own
+  `(req, res)` handler format, since Netlify and Vercel use different
+  function signatures) under `api/`, which Vercel auto-detects with no
+  config needed beyond `vercel.json` (which just handles the `/learn/:slug`
+  clean-URL rewrite — folder-based clean URLs like `/open-account` work
+  automatically on Vercel too).
+
+The frontend always calls the platform-neutral path `/api/<function-name>`
+— never `/.netlify/functions/...` directly. On Vercel this resolves
+natively. On Netlify, `_redirects` rewrites `/api/*` to the matching
+function under `/.netlify/functions/*`. This means the same frontend
+code works unmodified on whichever platform is actually live — useful
+if you ever need to switch (e.g. Netlify's free-tier credits running
+out), since no HTML/JS needs to change, only where the site is deployed
+and its DNS target.
+
+**If you add or change a function**, update it in both places:
+`netlify/functions/<name>.js` (Netlify's `exports.handler = async (event) => {...}`
+style) and `api/<name>.js` (Vercel's `module.exports = async (req, res) => {...}`
+style). The shared helpers in `netlify/functions/utils/` and `api/utils/`
+are plain Node (no platform-specific code), so those two copies should
+stay identical — only the function-file wrappers differ.
+
+To deploy on Vercel instead of Netlify: create a Vercel account, import
+this GitHub repo as a new project, set the same environment variables
+listed above (Vercel → Project Settings → Environment Variables), deploy,
+verify on the `*.vercel.app` preview URL, then point `tippingpoint.bglafrica.com`'s
+DNS at Vercel (Vercel's domain settings will show the exact records to add).
