@@ -85,7 +85,7 @@ exports.handler = async (event) => {
     return jsonResponse(200, { ok: true, status: appRow.status, sentTo: appRow.applicant_email });
   } catch (err) {
     console.error('resend-notification error:', err);
-    return jsonResponse(500, { error: 'Could not resend the notification. Please try again.' });
+    return jsonResponse(500, { error: 'Could not resend the notification: ' + (err.message || 'Unknown error') });
   }
 };
 
