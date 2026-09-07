@@ -948,16 +948,27 @@ let activeUploads = 0;
 function updateNextButtonState(){
   const nextBtn = document.getElementById('aowNextBtn');
   if(!nextBtn) return;
+
   if(activeUploads > 0){
     nextBtn.disabled = true;
     nextBtn.dataset.origLabel = nextBtn.dataset.origLabel || nextBtn.textContent;
     nextBtn.textContent = 'Uploading document…';
-  } else {
-    nextBtn.disabled = false;
-    if(nextBtn.dataset.origLabel){
-      nextBtn.textContent = nextBtn.dataset.origLabel;
-      delete nextBtn.dataset.origLabel;
-    }
+    return;
+  }
+
+  // Not mid-upload — but also require every document on THIS step to
+  // already be attached before Continue is clickable at all, not just
+  // block it after the fact once someone tries to proceed.
+  const missingRequired = Array.from(document.querySelectorAll('.upload[data-doc-required="true"]')).some(wrap => {
+    const prefix = wrap.dataset.prefix;
+    const key = wrap.dataset.dockey;
+    return !(state.files[prefix] && state.files[prefix][key]);
+  });
+
+  nextBtn.disabled = missingRequired;
+  if(nextBtn.dataset.origLabel){
+    nextBtn.textContent = nextBtn.dataset.origLabel;
+    delete nextBtn.dataset.origLabel;
   }
 }
 
