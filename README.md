@@ -130,6 +130,14 @@ other page, so it's a normal Netlify-served page like `/faq` or
     straight from the browser. Run `supabase/admin_policies.sql` once
     (after `schema.sql`) to grant the authenticated admin session
     read-only access to these tables and to the document storage bucket.
+  - **Resending a notification**: every application in the detail view
+    has a "Resend notification email" action (`resend-notification.js`),
+    which re-sends whatever email matches the application's *current*
+    stored status (confirmation / under review / opened / rejected) —
+    using the CHN, CSCS Account Number, or rejection reason already on
+    file, not new input. Useful for backfilling applicants who were
+    updated before a fix to an email's content, or whose original send
+    failed silently.
 - **Tracking**: `/track-application` is a public page (no login) where
   an applicant enters their application reference and the email they
   applied with to see a simple status tracker (Submitted → Under review

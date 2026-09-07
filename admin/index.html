@@ -1260,17 +1260,39 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   };
 
   function renderActionButtons(app){
+    let buttons = '';
     if(app.status === 'submitted'){
-      return `<button class="btn btn-ghost" onclick="startReview('${app.id}')">Start review</button>`;
+      buttons += `<button class="btn btn-ghost" onclick="startReview('${app.id}')">Start review</button>`;
     }
     if(app.status === 'under_review'){
-      return `
+      buttons += `
         <button class="btn btn-primary" onclick="openOpenedModal('${app.id}')">Mark as opened</button>
         <button class="btn btn-ghost" style="color:#b3452f; border-color:#b3452f;" onclick="openRejectModal('${app.id}')">Reject</button>
       `;
     }
-    return '';
+    // Available regardless of status — mainly for backfilling applicants
+    // who were updated before a fix to an email's content (or whose
+    // original send failed), without changing their status again.
+    buttons += `<button class="link-btn" style="margin-left:4px;" onclick="resendNotification('${app.id}')">Resend notification email</button>`;
+    return buttons;
   }
+
+  window.resendNotification = async function(id){
+    if(!confirm('Resend the current status notification email to this applicant?')) return;
+    try{
+      const token = await getAuthToken();
+      const res = await fetch('/api/resend-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ applicationId: id })
+      });
+      const result = await res.json();
+      if(!res.ok) throw new Error(result.error || 'Something went wrong.');
+      alert(`Sent to ${result.sentTo}.`);
+    } catch(err){
+      alert(err.message);
+    }
+  };
 
   function detailRow(label, value){
     if(value === undefined || value === null || value === '') return '';

@@ -13,3 +13,4 @@
 /api/create-upload-url          /.netlify/functions/create-upload-url          200
 /api/update-application-status  /.netlify/functions/update-application-status  200
 /api/track-application           /.netlify/functions/track-application          200
+/api/resend-notification         /.netlify/functions/resend-notification        200
