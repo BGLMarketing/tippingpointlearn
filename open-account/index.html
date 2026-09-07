@@ -943,6 +943,24 @@ function formatMB(bytes){
   return (bytes / (1024*1024)).toFixed(1) + 'MB';
 }
 
+let activeUploads = 0;
+
+function updateNextButtonState(){
+  const nextBtn = document.getElementById('aowNextBtn');
+  if(!nextBtn) return;
+  if(activeUploads > 0){
+    nextBtn.disabled = true;
+    nextBtn.dataset.origLabel = nextBtn.dataset.origLabel || nextBtn.textContent;
+    nextBtn.textContent = 'Uploading document…';
+  } else {
+    nextBtn.disabled = false;
+    if(nextBtn.dataset.origLabel){
+      nextBtn.textContent = nextBtn.dataset.origLabel;
+      delete nextBtn.dataset.origLabel;
+    }
+  }
+}
+
 async function handleFile(prefix, key, input, id){
   const file = input.files[0];
   if(!file) return;
@@ -972,6 +990,12 @@ async function handleFile(prefix, key, input, id){
   const originalHint = hintEl.innerHTML;
   wrap.classList.add('uploading');
   hintEl.textContent = 'Uploading…';
+
+  // Disable Continue for the duration of this upload — otherwise it's
+  // possible to click through to the next step (or even submit) while
+  // a file is still mid-upload, before it's actually recorded in state.
+  activeUploads++;
+  updateNextButtonState();
 
   try{
     const urlRes = await fetch('/api/create-upload-url', {
@@ -1013,6 +1037,9 @@ async function handleFile(prefix, key, input, id){
     hintEl.innerHTML = originalHint;
     input.value = '';
     alert("We couldn't upload that file. Please try again, or contact clientservices@bglafrica.com if this keeps happening.");
+  } finally {
+    activeUploads--;
+    updateNextButtonState();
   }
 }
 
@@ -1262,6 +1289,8 @@ function renderStep(){
   hydrateFields();
   document.getElementById('aowBackBtn').style.visibility = currentStep === 0 ? 'hidden' : 'visible';
   document.getElementById('aowNextBtn').textContent = currentStep === steps.length - 1 ? 'Submit application' : 'Continue';
+  delete document.getElementById('aowNextBtn').dataset.origLabel;
+  updateNextButtonState(); // in case a background upload from a previous step is still finishing
   window.scrollTo({top: document.getElementById('aowWizard').offsetTop - 100, behavior:'smooth'});
   persistState();
 }
