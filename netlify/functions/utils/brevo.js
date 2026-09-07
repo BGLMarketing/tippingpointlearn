@@ -195,7 +195,7 @@ async function sendApplicantUnderReviewEmail({ applicantEmail, applicantName, ap
   });
 }
 
-async function sendApplicantOpenedEmail({ applicantEmail, applicantName, applicationReference, chn }) {
+async function sendApplicantOpenedEmail({ applicantEmail, applicantName, applicationReference, chn, cscAccountNumber }) {
   const body = `
     <h2 style="font-size:18px; margin:0 0 16px; color:${BRAND.green};">Your account has been opened</h2>
     <p style="font-size:14px; color:${BRAND.ink}; margin:0 0 12px;">Hi ${applicantName || 'there'},</p>
@@ -205,6 +205,7 @@ async function sendApplicantOpenedEmail({ applicantEmail, applicantName, applica
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px; margin-bottom:16px;">
       <tr><td style="padding:4px 0; color:${BRAND.muted};">Application reference</td><td style="padding:4px 0; text-align:right; font-weight:bold;">${applicationReference}</td></tr>
       <tr><td style="padding:4px 0; color:${BRAND.muted};">CHN</td><td style="padding:4px 0; text-align:right; font-weight:bold;">${chn}</td></tr>
+      <tr><td style="padding:4px 0; color:${BRAND.muted};">CSCS Account Number</td><td style="padding:4px 0; text-align:right; font-weight:bold;">${cscAccountNumber}</td></tr>
     </table>
     <p style="font-size:14px; color:${BRAND.ink}; line-height:1.6;">Thank you for choosing BGL Securities.</p>
     ${button('Go to Tipping Point', BRAND.siteUrl)}

@@ -107,7 +107,8 @@ exports.handler = async (event) => {
             applicantEmail: appRow.applicant_email,
             applicantName: appRow.applicant_name,
             applicationReference: appRow.application_reference,
-            chn
+            chn,
+            cscAccountNumber
           });
         } else if (newStatus === 'rejected') {
           await sendApplicantRejectedEmail({
