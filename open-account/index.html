@@ -312,6 +312,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   }
   .upload.has-file{border-style:solid; border-color:var(--green);}
   .upload.uploading{border-style:solid; border-color:var(--gold); opacity:.75;}
+  .upload.invalid{border-style:solid; border-color:var(--signal);}
   .upload.uploading .upload-btn{pointer-events:none; opacity:.5;}
   .upload-icon{width:36px; height:36px; border-radius:8px; background:rgba(51,153,102,0.1); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:15px;}
   .upload-body{flex:1; min-width:0;}
@@ -464,7 +465,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <p>We'll email you at <strong id="aowRefEmail"></strong> as your application progresses.</p>
       <div style="display:flex; gap:10px; justify-content:center; margin-top:20px; flex-wrap:wrap;">
         <a class="btn btn-primary" id="aowTrackLink" href="/track-application">Track your application</a>
-        <button class="btn btn-ghost" onclick="location.reload()">Start another application</button>
+        <button class="btn btn-ghost" onclick="clearPersistedState(); location.reload();">Start another application</button>
       </div>
     </div>
 
@@ -706,6 +707,53 @@ const state = {
 let steps = [];
 let currentStep = 0;
 
+/* ============================================================
+   PERSISTENCE
+   Mobile browsers frequently reload the tab (freeing memory) when a
+   user backgrounds it to use the camera or file picker for an upload
+   — which silently wipes all in-memory JS state, appearing to send
+   the applicant back to the start. Persisting to sessionStorage after
+   every change means a reload like that is invisible: the wizard just
+   picks back up exactly where it was, uploaded documents included
+   (those already live in Supabase Storage — only their metadata needs
+   to survive the reload, not the files themselves).
+   ============================================================ */
+const PERSIST_KEY = 'aow_wizard_state_v1';
+
+function persistState(){
+  try{
+    sessionStorage.setItem(PERSIST_KEY, JSON.stringify({ state, currentStep }));
+  } catch(e){ /* storage unavailable/full — not critical, fail silently */ }
+}
+
+function restoreState(){
+  try{
+    const raw = sessionStorage.getItem(PERSIST_KEY);
+    if(!raw) return false;
+    const saved = JSON.parse(raw);
+    if(!saved || !saved.state || !saved.state.accountType) return false;
+    Object.assign(state, saved.state);
+    steps = buildSteps(state.accountType);
+    currentStep = Math.min(saved.currentStep || 0, steps.length - 1);
+    return true;
+  } catch(e){ return false; }
+}
+
+function clearPersistedState(){
+  try{ sessionStorage.removeItem(PERSIST_KEY); } catch(e){}
+}
+
+// Silently resume an in-progress application if one was interrupted
+// (e.g. a mobile reload during a file upload) — skip the entry screen
+// entirely and land right back where the applicant left off.
+(function tryResume(){
+  if(restoreState()){
+    document.getElementById('aowEntry').style.display = 'none';
+    document.getElementById('aowWizard').style.display = 'block';
+    renderStep();
+  }
+})();
+
 /* ---------- field renderers ---------- */
 function textField(prefix,key,label,required,span){
   return `<div class="field ${span||''}">
@@ -864,7 +912,7 @@ function documentFields(prefix, extra){
 function uploadField(prefix, key, label, hint){
   const id = `${prefix}_${key}`;
   return `
-  <div class="upload" id="${id}_wrap">
+  <div class="upload" id="${id}_wrap" data-prefix="${prefix}" data-dockey="${key}" data-doc-required="true">
     <div class="upload-icon">📄</div>
     <div class="upload-body">
       <div class="upload-title">${label}<span class="req">*</span></div>
@@ -956,7 +1004,9 @@ async function handleFile(prefix, key, input, id){
 
     wrap.classList.remove('uploading');
     wrap.classList.add('has-file');
+    wrap.classList.remove('invalid');
     hintEl.innerHTML = `<span class="upload-filename">${file.name} · ${formatMB(file.size)}</span>`;
+    persistState();
   } catch(err){
     console.error('Document upload failed:', err);
     wrap.classList.remove('uploading');
@@ -1213,6 +1263,7 @@ function renderStep(){
   document.getElementById('aowBackBtn').style.visibility = currentStep === 0 ? 'hidden' : 'visible';
   document.getElementById('aowNextBtn').textContent = currentStep === steps.length - 1 ? 'Submit application' : 'Continue';
   window.scrollTo({top: document.getElementById('aowWizard').offsetTop - 100, behavior:'smooth'});
+  persistState();
 }
 
 function hydrateFields(){
@@ -1228,6 +1279,20 @@ function hydrateFields(){
     const [group,key] = el.dataset.fieldRadio.split('.');
     const store = state[group] || {};
     if(store[key] === el.value) el.checked = true;
+  });
+  // Restore uploaded-file display when re-rendering a Documents step —
+  // otherwise a resumed session (or just clicking Back then Continue)
+  // would visually look like nothing was uploaded, even though it was.
+  document.querySelectorAll('.upload[data-doc-required="true"]').forEach(wrap=>{
+    const prefix = wrap.dataset.prefix;
+    const key = wrap.dataset.dockey;
+    const doc = state.files[prefix] && state.files[prefix][key];
+    if(doc){
+      wrap.classList.add('has-file');
+      wrap.classList.remove('invalid');
+      const hintEl = wrap.querySelector('.upload-hint');
+      if(hintEl) hintEl.innerHTML = `<span class="upload-filename">${doc.fileName} · ${formatMB(doc.fileSize)}</span>`;
+    }
   });
 }
 
@@ -1253,17 +1318,43 @@ function collectStep(){
     if(!state[group]) state[group] = {};
     state[group][key] = el.value;
   });
+
+  // Required document uploads — a missing one is just as invalid as a
+  // missing required text field, but wasn't being checked at all before,
+  // which meant it was possible to submit with no attachments.
+  document.querySelectorAll('.upload[data-doc-required="true"]').forEach(wrap=>{
+    const prefix = wrap.dataset.prefix;
+    const key = wrap.dataset.dockey;
+    const uploaded = state.files[prefix] && state.files[prefix][key];
+    if(!uploaded){
+      valid = false;
+      wrap.classList.add('invalid');
+    } else {
+      wrap.classList.remove('invalid');
+    }
+  });
+
+  persistState();
   return valid;
 }
 
 function goNext(){
   const stepId = steps[currentStep].id;
+  const errorEl = document.getElementById('aowSubmitError');
+  if(errorEl) errorEl.style.display = 'none';
 
   if(stepId === 'type'){
     if(!state.accountType){ alert('Please choose an account type to continue.'); return; }
   } else {
     const ok = collectStep();
-    if(!ok){ return; }
+    if(!ok){
+      if(errorEl){
+        errorEl.textContent = 'Please complete all required fields and attach all required documents before continuing.';
+        errorEl.style.display = 'block';
+      }
+      window.scrollTo({top: document.getElementById('aowWizard').offsetTop - 100, behavior:'smooth'});
+      return;
+    }
   }
 
   if(currentStep === steps.length - 1){
@@ -1349,6 +1440,7 @@ function getApplicantEmail(){
 }
 
 function showSuccess(ref, email){
+  clearPersistedState();
   document.getElementById('aowWizard').style.display = 'none';
   document.getElementById('aowSuccess').style.display = 'block';
   document.getElementById('aowRefPill').textContent = ref;

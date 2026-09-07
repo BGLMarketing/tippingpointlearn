@@ -142,6 +142,22 @@ other page, so it's a normal Netlify-served page like `/faq` or
   generic "not found" response, so the endpoint can't be used to
   enumerate applications or confirm whether a given reference exists.
   It only ever returns status fields, never the full applicant record.
+- **Mobile reliability**: the wizard persists its full state (all
+  entered fields, current step, and uploaded document metadata) to
+  `sessionStorage` after every change. This matters specifically for
+  mobile: opening the camera or file picker to attach a document often
+  causes the OS to reclaim the browser tab's memory, which silently
+  reloads the page and would otherwise wipe all in-progress form data.
+  With persistence in place, a reload like that is invisible — the
+  applicant lands right back where they left off. State clears once
+  the application is actually submitted, or when starting a new one.
+- **Document uploads are actually required**: every document field is
+  validated the same way required text fields are — attempting to
+  continue past the Documents step (or reach Review & Submit) without
+  a required file attached is blocked with a visible error, and the
+  missing upload field is outlined. This wasn't enforced in an earlier
+  version, which allowed a submission to go through with zero
+  attachments if the applicant simply skipped the upload buttons.
 - **Consent tracking**: the PEP/indemnity/risk-disclosure checkboxes on
   the Disclosures step record the exact client-side timestamp at the
   moment each box is checked (not the later submission time), and this
