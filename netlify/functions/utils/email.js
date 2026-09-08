@@ -82,8 +82,12 @@ function button(label, href) {
 async function sendEmail({ to, subject, html, replyTo }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn('RESEND_API_KEY not set — skipping email send:', subject, to);
-    return { skipped: true };
+    // Never silently pretend this succeeded — a missing key is a real
+    // misconfiguration, and every caller in this file is written to
+    // let a thrown error here become visible (either as a 500 with a
+    // real message, or at minimum a logged failure), rather than
+    // reporting success while nothing was actually sent to anyone.
+    throw new Error('RESEND_API_KEY is not set — cannot send email.');
   }
 
   const senderName = process.env.EMAIL_SENDER_NAME || 'BGL Securities';
