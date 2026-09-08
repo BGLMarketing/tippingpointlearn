@@ -1,4 +1,4 @@
-const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
+const RESEND_API_URL = 'https://api.resend.com/emails';
 
 const BRAND = {
   green: '#005E00',
@@ -71,37 +71,44 @@ function button(label, href) {
   </table>`;
 }
 
-async function sendBrevoEmail({ to, subject, html, replyTo }) {
-  const apiKey = process.env.BREVO_API_KEY;
+/**
+ * Sends one email via Resend's API. Resend authenticates purely by
+ * API key — no IP allowlisting involved, which matters specifically
+ * because these functions run on serverless infrastructure with
+ * rotating outbound IPs (the reason an earlier Brevo-based version of
+ * this file kept failing silently: Brevo's optional IP-restriction
+ * feature was blocking every send from Vercel's IP pool).
+ */
+async function sendEmail({ to, subject, html, replyTo }) {
+  const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn('BREVO_API_KEY not set — skipping email send:', subject, to);
+    console.warn('RESEND_API_KEY not set — skipping email send:', subject, to);
     return { skipped: true };
   }
 
-  const payload = {
-    sender: {
-      name: process.env.BREVO_SENDER_NAME || 'BGL Securities',
-      email: process.env.BREVO_SENDER_EMAIL || 'no-reply@bglafrica.com'
-    },
-    to: Array.isArray(to) ? to.map((email) => ({ email })) : [{ email: to }],
-    subject,
-    htmlContent: html
-  };
-  if (replyTo) payload.replyTo = { email: replyTo };
+  const senderName = process.env.EMAIL_SENDER_NAME || 'BGL Securities';
+  const senderEmail = process.env.EMAIL_SENDER_EMAIL || 'no-reply@bglafrica.com';
 
-  const res = await fetch(BREVO_API_URL, {
+  const payload = {
+    from: `${senderName} <${senderEmail}>`,
+    to: Array.isArray(to) ? to : [to],
+    subject,
+    html
+  };
+  if (replyTo) payload.reply_to = replyTo;
+
+  const res = await fetch(RESEND_API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Accept: 'application/json',
-      'api-key': apiKey
+      Authorization: `Bearer ${apiKey}`
     },
     body: JSON.stringify(payload)
   });
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`Brevo send failed (${res.status}): ${errText}`);
+    throw new Error(`Resend send failed (${res.status}): ${errText}`);
   }
 
   return res.json();
@@ -136,7 +143,7 @@ async function sendInternalNewSubmissionAlert({
 
   const html = wrapEmail(`New ${typeLabel} account opening request — ${applicationReference}`, body);
 
-  return sendBrevoEmail({
+  return sendEmail({
     to: ['clientservices@bglafrica.com', 'marketing@bglafrica.ng'],
     subject: `New Account Opening Request — ${typeLabel} — ${applicationReference}`,
     html
@@ -160,7 +167,7 @@ async function sendApplicantConfirmationEmail({ applicantEmail, applicantName, a
 
   const html = wrapEmail('Your BGL account opening application has been received', body);
 
-  return sendBrevoEmail({
+  return sendEmail({
     to: applicantEmail,
     subject: "We've Received Your BGL Account Opening Request",
     html
@@ -188,7 +195,7 @@ async function sendApplicantUnderReviewEmail({ applicantEmail, applicantName, ap
 
   const html = wrapEmail('Your BGL account opening request is under review', body);
 
-  return sendBrevoEmail({
+  return sendEmail({
     to: applicantEmail,
     subject: 'Your BGL Account Opening Request Is Under Review',
     html
@@ -213,7 +220,7 @@ async function sendApplicantOpenedEmail({ applicantEmail, applicantName, applica
 
   const html = wrapEmail('Your BGL account has been opened', body);
 
-  return sendBrevoEmail({
+  return sendEmail({
     to: applicantEmail,
     subject: 'Your BGL Account Has Been Opened',
     html
@@ -237,7 +244,7 @@ async function sendApplicantRejectedEmail({ applicantEmail, applicantName, appli
 
   const html = wrapEmail('Update on your BGL account opening request', body);
 
-  return sendBrevoEmail({
+  return sendEmail({
     to: applicantEmail,
     subject: 'Update on Your BGL Account Opening Request',
     html
@@ -247,7 +254,7 @@ async function sendApplicantRejectedEmail({ applicantEmail, applicantName, appli
 module.exports = {
   wrapEmail,
   button,
-  sendBrevoEmail,
+  sendEmail,
   sendInternalNewSubmissionAlert,
   sendApplicantConfirmationEmail,
   sendApplicantUnderReviewEmail,

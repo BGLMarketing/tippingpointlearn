@@ -4,7 +4,7 @@ const {
   sendApplicantUnderReviewEmail,
   sendApplicantOpenedEmail,
   sendApplicantRejectedEmail
-} = require('./utils/brevo');
+} = require('./utils/email');
 
 // Re-sends the notification email matching an application's CURRENT
 // stored status — used to backfill applicants who were updated before
