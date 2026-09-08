@@ -1608,6 +1608,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     const agentName = document.getElementById('ref-agent-name').value.trim();
     let code = document.getElementById('ref-custom-code').value.trim();
     if(!code) code = generateReferralCode();
+    code = code.toUpperCase(); // codes are always stored uppercase, matching is case-insensitive
 
     const { data: { session } } = await sb.auth.getSession();
 

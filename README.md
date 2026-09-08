@@ -212,7 +212,9 @@ other page, so it's a normal Netlify-served page like `/faq` or
   Applicants enter that code in the existing "Referred by /
   Relationship Manager" field — no change to that field itself, it's
   still free text, so a typo or a code that was never actually issued
-  just won't match anything. The agent can then check
+  just won't match anything. Matching is case-insensitive: codes are
+  always stored uppercase, and the lookup matches the applicant's
+  typed value case-insensitively too. The agent can then check
   `/referral-status` (public, no login) with their code to see a
   count and list of every application referred with it and each one's
   current status. Backed by `referral-lookup.js`, same pattern as
@@ -224,6 +226,23 @@ other page, so it's a normal Netlify-served page like `/faq` or
   rather than through a function, since creating/deleting a code has
   no side effects like emails to trigger. Run `supabase/referral_codes.sql`
   once to set up the table.
+- **Self-service referral codes**: `/open-account`'s entry screen has
+  two links — "Check your referrals" (straight to `/referral-status`)
+  and "Refer someone to BGL", which opens a modal where anyone (not
+  just admin-designated agents) can enter their name and a preferred
+  code to get their own code and a shareable link
+  (`/open-account?ref=<code>`). Backed by the public
+  `create-referral-code.js` — validates the code is 3-20 characters of
+  letters/numbers/hyphens, rejects a code that's already taken (case-
+  insensitively) rather than silently generating a different one,
+  since the applicant explicitly chose that code. Self-service codes
+  land in the same `referral_codes` table as admin-created ones
+  (distinguished only by `created_by = 'self-service'`) and work
+  identically everywhere — `/referral-status`, the wizard's referral
+  field, etc. Visiting `/open-account?ref=<code>` pre-fills the
+  "Referred by" field automatically (reading the `ref` query param on
+  load), taking priority even over a resumed in-progress session,
+  since clicking a shared link is a clear, explicit signal.
 
 ## Deploying
 

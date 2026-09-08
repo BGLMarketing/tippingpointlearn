@@ -15,3 +15,4 @@
 /api/track-application           /.netlify/functions/track-application          200
 /api/resend-notification         /.netlify/functions/resend-notification        200
 /api/referral-lookup             /.netlify/functions/referral-lookup            200
+/api/create-referral-code        /.netlify/functions/create-referral-code       200

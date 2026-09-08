@@ -440,6 +440,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <h2>Ready to begin?</h2>
       <p>The application takes about 10 minutes. You can go back and edit any step before submitting.</p>
       <button class="btn btn-primary" onclick="startWizard()">Open an Account with BGL</button>
+      <div style="margin-top:20px; display:flex; gap:18px; justify-content:center; flex-wrap:wrap; font-size:13px;">
+        <a href="/referral-status" style="color:var(--green-deep); font-weight:600;">Check your referrals</a>
+        <button type="button" onclick="openReferModal()" style="background:none; border:none; padding:0; color:var(--green-deep); font-weight:600; font-size:13px; cursor:pointer; text-decoration:underline;">Refer someone to BGL</button>
+      </div>
     </div>
 
     <!-- WIZARD -->
@@ -613,6 +617,39 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   </div>
 </div>
 
+<!-- ===== Refer someone to BGL modal ===== -->
+<div class="modal-overlay" id="referOverlay" onclick="if(event.target===this) closeReferModal()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="referTitle">
+    <button class="modal-close" onclick="closeReferModal()" aria-label="Close">✕</button>
+
+    <div id="referFormView">
+      <div class="eyebrow">Refer &amp; share</div>
+      <h3 id="referTitle">Refer someone to BGL</h3>
+      <p class="sub">Get your own referral code and link. Anyone who opens an account through it is tracked to you.</p>
+
+      <div class="field">
+        <label>Your name</label>
+        <input type="text" id="referName" placeholder="Your full name">
+      </div>
+      <div class="field">
+        <label>Preferred code</label>
+        <input type="text" id="referCode" placeholder="e.g. TEMI2026" style="text-transform:uppercase;">
+      </div>
+      <button class="btn btn-primary" style="width:100%; padding:13px;" id="referSubmitBtn" onclick="submitReferral()">Get my referral link</button>
+      <p id="referError" style="display:none; color:var(--signal); font-size:13px; margin-top:12px;"></p>
+    </div>
+
+    <div id="referSuccessView" style="display:none; text-align:center;">
+      <div class="eyebrow">You're set</div>
+      <h3>Your referral link is ready</h3>
+      <p class="sub">Share this link — anyone who applies through it is automatically credited to you.</p>
+      <div style="background:var(--paper); border:1px solid var(--line-dark); border-radius:10px; padding:12px; font-family:'IBM Plex Mono', monospace; font-size:13px; word-break:break-all; margin-bottom:14px;" id="referLinkDisplay"></div>
+      <button class="btn btn-primary" style="width:100%; padding:13px;" onclick="copyReferLink(event)">Copy link</button>
+      <p style="font-size:12.5px; color:rgba(22,36,26,0.55); margin-top:14px;">Your code: <strong id="referCodeDisplay"></strong> — check its status anytime at <a href="/referral-status" style="color:var(--green-deep);">/referral-status</a>.</p>
+    </div>
+  </div>
+</div>
+
 <script>
   window.REQUIRED_CODE_ERROR_MESSAGE = 'Please choose a country code';
   window.LOCALE = 'en';
@@ -752,7 +789,86 @@ function clearPersistedState(){
     document.getElementById('aowWizard').style.display = 'block';
     renderStep();
   }
+  // A referral code arriving via a shared link (e.g. /open-account?ref=TEMI2026)
+  // takes priority even over a resumed session's existing value —
+  // clicking a link is an explicit signal.
+  const urlParams = new URLSearchParams(window.location.search);
+  const refParam = urlParams.get('ref');
+  if(refParam){
+    if(!state.account) state.account = {};
+    state.account.referredBy = refParam;
+    persistState();
+  }
 })();
+
+/* ============================================================
+   REFER SOMEONE TO BGL (self-service referral code)
+   ============================================================ */
+function openReferModal(){
+  document.getElementById('referFormView').style.display = 'block';
+  document.getElementById('referSuccessView').style.display = 'none';
+  document.getElementById('referName').value = '';
+  document.getElementById('referCode').value = '';
+  document.getElementById('referError').style.display = 'none';
+  document.getElementById('referOverlay').classList.add('open');
+}
+function closeReferModal(){
+  document.getElementById('referOverlay').classList.remove('open');
+}
+
+async function submitReferral(){
+  const name = document.getElementById('referName').value.trim();
+  const code = document.getElementById('referCode').value.trim();
+  const errEl = document.getElementById('referError');
+  const btn = document.getElementById('referSubmitBtn');
+  errEl.style.display = 'none';
+
+  if(!name || !code){
+    errEl.textContent = 'Please enter your name and a preferred code.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Creating…';
+
+  try{
+    const res = await fetch('/api/create-referral-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, code })
+    });
+    const result = await res.json();
+    if(!res.ok){
+      errEl.textContent = result.error || 'Could not create that code. Please try again.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    document.getElementById('referFormView').style.display = 'none';
+    document.getElementById('referSuccessView').style.display = 'block';
+    document.getElementById('referLinkDisplay').textContent = result.shareUrl;
+    document.getElementById('referCodeDisplay').textContent = result.code;
+  } catch(err){
+    errEl.textContent = 'Something went wrong. Please try again.';
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Get my referral link';
+  }
+}
+
+function copyReferLink(evt){
+  const text = document.getElementById('referLinkDisplay').textContent;
+  const btn = evt.currentTarget;
+  navigator.clipboard.writeText(text).then(()=>{
+    const original = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(()=>{ btn.textContent = original; }, 1500);
+  }).catch(()=>{
+    alert('Could not copy automatically — please select and copy the link manually.');
+  });
+}
 
 /* ---------- field renderers ---------- */
 function textField(prefix,key,label,required,span){

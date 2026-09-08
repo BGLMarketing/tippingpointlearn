@@ -18,7 +18,7 @@ exports.handler = async (event) => {
     return jsonResponse(400, { error: 'Malformed request body.' });
   }
 
-  const code = (body.code || '').trim();
+  const code = (body.code || '').trim().toUpperCase();
   if (!code) {
     return jsonResponse(400, { error: 'Please provide a referral code.' });
   }
@@ -35,10 +35,13 @@ exports.handler = async (event) => {
       return jsonResponse(404, { error: "We couldn't find that referral code." });
     }
 
+    // referred_by is free text an applicant typed on the wizard, not
+    // guaranteed to match the stored (always-uppercase) code's exact
+    // case — match case-insensitively.
     const { data: applications, error: appsErr } = await supabase
       .from('account_opening_applications')
       .select('application_reference, applicant_name, account_type, status, submitted_at, opened_at, chn')
-      .eq('referred_by', code)
+      .ilike('referred_by', code)
       .order('submitted_at', { ascending: false });
 
     if (appsErr) throw appsErr;
