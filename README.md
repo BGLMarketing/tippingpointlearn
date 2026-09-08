@@ -14,6 +14,8 @@ Static site for Tipping Point (BGL Securities' digital investment platform), cur
                     "Account opening" below
 /track-application → Public status lookup for a submitted application
                     (reference + email) — see "Account opening" below
+/referral-status  → Public lookup for a referral code (agent view of who
+                    used it) — see "Account opening" below
 ```
 
 Each page is a self-contained `index.html` (or `<name>.html` at root, which Netlify
@@ -204,6 +206,24 @@ other page, so it's a normal Netlify-served page like `/faq` or
   the community"). On `/open-account` itself, that same nav-cta slot
   becomes a static, non-clickable label — the same pattern used for
   "Learn" and "Dangote IPO" on their own pages.
+- **Referral codes**: admin creates a code per agent/relationship
+  manager from the "Referral codes" tab in `/admin` (agent name +
+  either a custom code or an auto-generated one, e.g. `RM-4X7QK2`).
+  Applicants enter that code in the existing "Referred by /
+  Relationship Manager" field — no change to that field itself, it's
+  still free text, so a typo or a code that was never actually issued
+  just won't match anything. The agent can then check
+  `/referral-status` (public, no login) with their code to see a
+  count and list of every application referred with it and each one's
+  current status. Backed by `referral-lookup.js`, same pattern as
+  `track-application.js`: the code itself (admin-issued, not
+  guessable) is the access control, and only a safe subset of fields
+  is ever returned (reference, name, type, status — never email,
+  banking details, or documents). Admin manages the `referral_codes`
+  table directly from the browser (same as the Learn articles table)
+  rather than through a function, since creating/deleting a code has
+  no side effects like emails to trigger. Run `supabase/referral_codes.sql`
+  once to set up the table.
 
 ## Deploying
 

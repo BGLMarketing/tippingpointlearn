@@ -747,6 +747,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <div class="tab-bar">
       <button class="tab-btn active" id="tab-articles" onclick="switchTab('articles')">Learn articles</button>
       <button class="tab-btn" id="tab-applications" onclick="switchTab('applications')">Account applications</button>
+      <button class="tab-btn" id="tab-referrals" onclick="switchTab('referrals')">Referral codes</button>
     </div>
 
     <div id="articles-panel">
@@ -832,6 +833,37 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
       <div id="application-detail-view" hidden></div>
 
+    </div>
+
+    <div id="referrals-panel" hidden>
+      <div class="form-card" style="margin-bottom:24px;">
+        <h3>New referral code</h3>
+        <form id="referral-form">
+          <div class="field-row">
+            <div class="field">
+              <label for="ref-agent-name">Agent / relationship manager name</label>
+              <input type="text" id="ref-agent-name" required>
+            </div>
+            <div class="field">
+              <label for="ref-custom-code">Code (optional — leave blank to auto-generate)</label>
+              <input type="text" id="ref-custom-code" placeholder="e.g. RM-4821">
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Create code</button>
+          </div>
+          <div class="form-status" id="referral-form-status"></div>
+        </form>
+      </div>
+
+      <table class="article-table">
+        <thead>
+          <tr><th>Agent</th><th>Code</th><th>Referrals</th><th>Created</th><th></th></tr>
+        </thead>
+        <tbody id="referral-table-body">
+          <tr class="empty-row"><td colspan="5">Loading…</td></tr>
+        </tbody>
+      </table>
     </div>
 
   </div>
@@ -1199,13 +1231,18 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
      TAB SWITCHING
      ============================================================ */
   window.switchTab = function(tab){
-    const isArticles = tab === 'articles';
-    document.getElementById('tab-articles').classList.toggle('active', isArticles);
-    document.getElementById('tab-applications').classList.toggle('active', !isArticles);
-    document.getElementById('articles-panel').hidden = !isArticles;
-    document.getElementById('applications-panel').hidden = isArticles;
-    document.getElementById('dashboard-title').textContent = isArticles ? 'Manage articles' : 'Account opening applications';
-    if(!isArticles) loadApplications();
+    document.getElementById('tab-articles').classList.toggle('active', tab === 'articles');
+    document.getElementById('tab-applications').classList.toggle('active', tab === 'applications');
+    document.getElementById('tab-referrals').classList.toggle('active', tab === 'referrals');
+    document.getElementById('articles-panel').hidden = tab !== 'articles';
+    document.getElementById('applications-panel').hidden = tab !== 'applications';
+    document.getElementById('referrals-panel').hidden = tab !== 'referrals';
+
+    const titles = { articles: 'Manage articles', applications: 'Account opening applications', referrals: 'Referral codes' };
+    document.getElementById('dashboard-title').textContent = titles[tab];
+
+    if(tab === 'applications') loadApplications();
+    if(tab === 'referrals') loadReferralCodes();
   };
 
   /* ============================================================
@@ -1518,6 +1555,89 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       statusEl.textContent = err.message;
       statusEl.className = 'form-status error';
     }
+  };
+
+  /* ============================================================
+     REFERRAL CODES
+     ============================================================ */
+  function generateReferralCode(){
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I to avoid confusion
+    let code = 'RM-';
+    for(let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
+  }
+
+  async function loadReferralCodes(){
+    const tbody = document.getElementById('referral-table-body');
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Loading…</td></tr>';
+
+    const { data: codes, error } = await sb.from('referral_codes').select('*').order('created_at', { ascending: false });
+    if(error){
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="5">Error loading codes: ${escapeHtml(error.message)}</td></tr>`;
+      return;
+    }
+    if(!codes || !codes.length){
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No referral codes yet.</td></tr>';
+      return;
+    }
+
+    // One count query per code — fine at this scale (a handful of agents).
+    const counts = await Promise.all(codes.map(c =>
+      sb.from('account_opening_applications').select('id', { count: 'exact', head: true }).eq('referred_by', c.code)
+    ));
+
+    tbody.innerHTML = codes.map((c, i) => {
+      const count = counts[i] && typeof counts[i].count === 'number' ? counts[i].count : '—';
+      const date = new Date(c.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+      return `<tr>
+        <td>${escapeHtml(c.agent_name)}</td>
+        <td style="font-family:'IBM Plex Mono', monospace; font-size:12.5px;">${escapeHtml(c.code)}</td>
+        <td>${count}</td>
+        <td>${date}</td>
+        <td class="table-actions"><button class="link-btn danger" onclick="deleteReferralCode('${c.id}','${escapeHtml(c.code)}')">Delete</button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  document.getElementById('referral-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const statusEl = document.getElementById('referral-form-status');
+    statusEl.textContent = '';
+    statusEl.className = 'form-status';
+
+    const agentName = document.getElementById('ref-agent-name').value.trim();
+    let code = document.getElementById('ref-custom-code').value.trim();
+    if(!code) code = generateReferralCode();
+
+    const { data: { session } } = await sb.auth.getSession();
+
+    const { error } = await sb.from('referral_codes').insert({
+      agent_name: agentName,
+      code,
+      created_by: session ? session.user.email : null
+    });
+
+    if(error){
+      statusEl.textContent = error.message.includes('duplicate') ? 'That code is already in use — try another.' : error.message;
+      statusEl.className = 'form-status error';
+      return;
+    }
+
+    statusEl.textContent = `Created code: ${code}`;
+    statusEl.className = 'form-status success';
+    document.getElementById('ref-agent-name').value = '';
+    document.getElementById('ref-custom-code').value = '';
+    await loadReferralCodes();
+  });
+
+  window.deleteReferralCode = async function(id, code){
+    if(!confirm(`Delete referral code "${code}"? Applications already referred with it are not affected.`)) return;
+    const { error } = await sb.from('referral_codes').delete().eq('id', id);
+    if(error){
+      alert(error.message);
+      return;
+    }
+    await loadReferralCodes();
   };
 </script>
 
