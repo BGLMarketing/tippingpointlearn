@@ -6,9 +6,22 @@ const { sendIpoSubmissionReceivedEmail, sendIpoInternalAlert } = require('./util
 // — this function only receives small JSON, same pattern as
 // submit-application.js for the account opening feature.
 
+// Subscriptions open 14 September 2026, 00:00 WAT — same moment as
+// the frontend gate in /dangote-ipo and /dangote-ipo/subscribe. The
+// frontend hides the "Subscribe" button and blocks the wizard until
+// this passes, but that's only a UI convenience — this server-side
+// check is what actually stops a subscription being recorded before
+// the offer is real. Keep in sync with the two frontend copies of
+// this constant if the date ever changes.
+const IPO_OFFER_OPENS_AT = new Date('2026-09-14T00:00:00+01:00');
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  if (new Date() < IPO_OFFER_OPENS_AT) {
+    return res.status(403).json({ error: 'The Dangote Refinery IPO is not open for subscription yet. It opens 14 September 2026.' });
   }
 
   let body;

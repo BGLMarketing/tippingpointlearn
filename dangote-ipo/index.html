@@ -523,8 +523,13 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   }
   .dip-hero .eyebrow{ color:var(--gold-soft); margin-bottom:18px; }
   .dip-hero h1{ font-size:clamp(30px,4vw,46px); letter-spacing:-0.015em; margin-bottom:18px; color:var(--paper); }
-  .dip-hero p.lead{ font-size:16.5px; line-height:1.62; color:rgba(246,241,228,0.8); max-width:48ch; margin-bottom:28px; }
-  .dip-hero-actions{ display:flex; gap:14px; flex-wrap:wrap; margin-bottom:22px; }
+  .dip-hero p.lead{ font-size:16.5px; line-height:1.62; color:rgba(246,241,228,0.8); max-width:48ch; margin-bottom:32px; }
+  .dip-hero-facts{ display:flex; gap:30px; flex-wrap:wrap; margin-bottom:32px; }
+  .dip-hero-fact{ border-left:2px solid var(--gold); padding-left:14px; }
+  .dip-hero-fact .num{ font-family:'Fraunces', serif; font-weight:600; font-size:clamp(21px,2.4vw,27px); color:var(--paper); display:block; line-height:1.1; }
+  .dip-hero-fact .lbl{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--gold-soft); margin-top:5px; display:block; }
+  .dip-hero-actions{ display:flex; gap:14px; flex-wrap:wrap; margin-bottom:20px; }
+  .dip-hero-trust{ font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(246,241,228,0.5); margin-top:18px; }
   .dip-badge-row{ display:flex; gap:10px; flex-wrap:wrap; }
   .dip-badge{
     font-family:'IBM Plex Mono', monospace;
@@ -625,6 +630,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     .dip-cta-band{ padding:40px 0; }
     .dip-hero-actions .btn{ flex:1 1 auto; text-align:center; }
     .dip-cta-actions .btn{ flex:1 1 auto; text-align:center; }
+    .dip-hero-facts{ gap:20px; margin-bottom:26px; }
     .dip-stat-grid{ gap:10px; }
     .dip-stat{ padding:16px; }
     .dip-stat .num{ font-size:19px; }
@@ -639,6 +645,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     .dip-hero-actions .btn{ width:100%; }
     .dip-cta-actions{ flex-direction:column; align-items:stretch; }
     .dip-cta-actions .btn{ width:100%; }
+    .dip-hero-facts{ flex-direction:column; gap:14px; }
     .dip-stat-grid{ grid-template-columns:1fr; }
     .dip-illustration svg{ max-width:210px; }
   }
@@ -893,21 +900,21 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <header class="dip-hero">
   <div class="container">
     <div>
-      <div class="eyebrow">Now Open — Dangote Refinery IPO</div>
+      <div class="eyebrow">Opens 14 September 2026</div>
       <h1>Own a Piece of the Dangote Refinery IPO</h1>
-      <p class="lead">Africa's largest single-train refinery is heading toward one of the biggest public listings in the continent's history. The offer opens 14 September 2026 at ₦525 per unit — here's how to take part, through Tipping Point.</p>
+      <p class="lead">Africa's largest single-train refinery is heading toward one of the biggest public listings in the continent's history. Here's how to take part, through Tipping Point.</p>
+      <div class="dip-hero-facts">
+        <div class="dip-hero-fact"><span class="num">₦525</span><span class="lbl">Per Unit</span></div>
+        <div class="dip-hero-fact"><span class="num">14 Sept 2026</span><span class="lbl">Offer Opens</span></div>
+        <div class="dip-hero-fact"><span class="num">50,000</span><span class="lbl">Minimum Units</span></div>
+      </div>
       <div class="dip-hero-actions">
-        <button class="btn btn-gold" onclick="location.href='/dangote-ipo/subscribe'">Subscribe to the IPO</button>
-        <button class="btn btn-primary" onclick="openWaitlist()">Join the waitlist</button>
+        <button class="btn btn-gold" data-ipo-subscribe-btn hidden onclick="location.href='/dangote-ipo/subscribe'">Subscribe to the IPO</button>
+        <button class="btn btn-gold" data-ipo-notify-btn onclick="openNotifyModal()">Get notified when it opens</button>
         <a href="https://whatsapp.com/channel/0029VbDBs7b2P59tpMSe8D2L" target="_blank" rel="noopener" class="btn btn-outline-light">Join the community</a>
       </div>
-      <div class="dip-badge-row">
-        <span class="dip-badge">Opens 14 Sept 2026</span>
-        <span class="dip-badge">₦525 per Unit</span>
-        <span class="dip-badge">Powered by BGL Securities</span>
-      </div>
-      <p class="hero-note" style="margin-top:20px; color:rgba(246,241,228,0.6);"><span class="dot"></span>Questions before then? Call our 24/7 IPO helpline: <a href="tel:+2349154966790" style="color:var(--gold-soft);">09154966790</a></p>
-      <p class="hero-note" style="margin-top:8px; color:rgba(246,241,228,0.6);"><span class="dot"></span>Not ready to subscribe yet? <a href="#" onclick="openNotifyModal(); return false;" style="color:var(--gold-soft);">Get email updates on the offer</a></p>
+      <p class="hero-note" style="color:rgba(246,241,228,0.6);"><span class="dot"></span>Questions before then? Call our 24/7 IPO helpline: <a href="tel:+2349154966790" style="color:var(--gold-soft);">09154966790</a></p>
+      <div class="dip-hero-trust">Powered by BGL Securities</div>
     </div>
     <div class="dip-illustration">
       <svg viewBox="0 0 380 380" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -965,7 +972,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <div class="section-head">
       <div class="eyebrow">How to take part</div>
       <h2>Own a Piece of Dangote in 3 Easy Steps</h2>
-      <p>The offer is open now — here's how to subscribe through Tipping Point.</p>
+      <p>Subscriptions open 14 September 2026 — here's how it'll work through Tipping Point.</p>
     </div>
     <div class="dip-step-grid">
       <div class="dip-step">
@@ -1108,10 +1115,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <section class="dip-cta-band">
   <div class="container">
     <h2>Don't just read about it. Own it.</h2>
-    <p>The offer is open now at ₦525 per unit — subscribe through Tipping Point, join the waitlist for updates on future offers, or come ask questions in the community first.</p>
+    <p>Subscriptions open 14 September 2026 at ₦525 per unit — get notified the moment they do, or come ask questions in the community first.</p>
     <div class="dip-cta-actions">
-      <button class="btn btn-gold" onclick="location.href='/dangote-ipo/subscribe'">Subscribe to the IPO</button>
-      <button class="btn btn-primary" onclick="openWaitlist()">Join the waitlist</button>
+      <button class="btn btn-gold" data-ipo-subscribe-btn hidden onclick="location.href='/dangote-ipo/subscribe'">Subscribe to the IPO</button>
+      <button class="btn btn-primary" data-ipo-notify-btn onclick="openNotifyModal()">Get notified when it opens</button>
       <a href="https://whatsapp.com/channel/0029VbDBs7b2P59tpMSe8D2L" target="_blank" rel="noopener" class="btn btn-outline-light">Join the community</a>
     </div>
   </div>
@@ -1142,7 +1149,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div class="faq-item">
         <button class="faq-q"><span><span class="qnum">03</span>Has the IPO officially opened?</span><span class="chev">＋</span></button>
         <div class="faq-a"><div class="faq-a-inner">
-          <p>The IPO will only be available once all necessary regulatory approvals have been obtained and the offer has been formally announced. BGL Securities will communicate the official opening and closing dates once they are confirmed.</p>
+          <p>Not yet — the offer opens on <strong>14 September 2026</strong>. You can subscribe from that date through Tipping Point, or get notified by email the moment it opens.</p>
         </div></div>
       </div>
 
@@ -1156,9 +1163,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div class="faq-item">
         <button class="faq-q"><span><span class="qnum">05</span>How can I participate through BGL Securities?</span><span class="chev">＋</span></button>
         <div class="faq-a"><div class="faq-a-inner">
-          <p>The offer is open now — you can register to participate through BGL Securities using any of the following channels:</p>
+          <p>Once the offer opens on 14 September 2026, you'll be able to participate through BGL Securities using any of the following channels:</p>
           <ul>
-            <li><strong>Tipping Point website:</strong> Click "Subscribe to the IPO" on this page and complete your subscription in a few guided steps.</li>
+            <li><strong>Tipping Point website:</strong> Once the offer opens, click "Subscribe to the IPO" on this page and complete your subscription in a few guided steps.</li>
             <li><strong>24/7 Help Line:</strong> Contact our dedicated help line on <a href="tel:+2349154966790">09154966790</a> and a BGL Securities representative will guide you through the process.</li>
           </ul>
         </div></div>
@@ -1478,6 +1485,37 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   </div>
 </div>
 
+<!-- ===== Notify me modal ===== -->
+<div class="modal-overlay" id="notifyOverlay" onclick="if(event.target===this) closeNotifyModal()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="notifyTitle">
+    <button class="modal-close" onclick="closeNotifyModal()" aria-label="Close">✕</button>
+    <div id="notifyFormView">
+      <div class="eyebrow">Stay informed</div>
+      <h3 id="notifyTitle">Get Dangote IPO updates</h3>
+      <p class="sub">Not ready to subscribe yet? We'll email you with updates and reminders about the offer.</p>
+      <div class="field">
+        <label>Your name</label>
+        <input type="text" id="notifyName" placeholder="Your full name">
+      </div>
+      <div class="field">
+        <label>Email address</label>
+        <input type="email" id="notifyEmail" placeholder="you@email.com">
+      </div>
+      <div class="field">
+        <label>Phone number (optional)</label>
+        <input type="tel" id="notifyPhone" placeholder="Phone number">
+      </div>
+      <button class="btn btn-primary" style="width:100%; padding:13px;" id="notifySubmitBtn" onclick="submitNotifySignup()">Notify me</button>
+      <p id="notifyError" style="display:none; color:var(--signal); font-size:13px; margin-top:12px;"></p>
+    </div>
+    <div id="notifySuccessView" style="display:none; text-align:center;">
+      <div class="eyebrow">You're on the list</div>
+      <h3>We'll keep you posted</h3>
+      <p class="sub">We'll email you with updates on the Dangote Refinery IPO.</p>
+    </div>
+  </div>
+</div>
+
 <script>
   const overlay = document.getElementById('waitlistOverlay');
   function openWaitlist(){
@@ -1526,6 +1564,80 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         a.style.maxHeight = a.scrollHeight + 'px';
       }
     });
+  });
+</script>
+<script>
+  /* ---------- Dangote IPO offer status ---------- */
+  // Subscriptions open 14 September 2026, 00:00 WAT (West Africa Time,
+  // UTC+1 — Nigeria doesn't observe daylight saving). Before this
+  // moment, the page shows a "Get notified" CTA instead of "Subscribe
+  // to the IPO" everywhere that button appears — this makes the page
+  // self-updating on the day itself with no redeploy needed. If the
+  // official opening date ever changes, update this constant (and the
+  // hero/FAQ copy that states the date in prose).
+  const IPO_OFFER_OPENS_AT = new Date('2026-09-14T00:00:00+01:00');
+
+  function updateIpoOfferState(){
+    const isOpen = new Date() >= IPO_OFFER_OPENS_AT;
+    document.querySelectorAll('[data-ipo-subscribe-btn]').forEach(el => { el.hidden = !isOpen; });
+    document.querySelectorAll('[data-ipo-notify-btn]').forEach(el => { el.hidden = isOpen; });
+  }
+  updateIpoOfferState();
+
+  /* ---------- notify me modal ---------- */
+  function openNotifyModal(){
+    document.getElementById('notifyFormView').style.display = 'block';
+    document.getElementById('notifySuccessView').style.display = 'none';
+    document.getElementById('notifyName').value = '';
+    document.getElementById('notifyEmail').value = '';
+    document.getElementById('notifyPhone').value = '';
+    document.getElementById('notifyError').style.display = 'none';
+    document.getElementById('notifyOverlay').classList.add('open');
+  }
+  function closeNotifyModal(){
+    document.getElementById('notifyOverlay').classList.remove('open');
+  }
+  async function submitNotifySignup(){
+    const name = document.getElementById('notifyName').value.trim();
+    const email = document.getElementById('notifyEmail').value.trim();
+    const phone = document.getElementById('notifyPhone').value.trim();
+    const errEl = document.getElementById('notifyError');
+    const btn = document.getElementById('notifySubmitBtn');
+    errEl.style.display = 'none';
+
+    if(!email){
+      errEl.textContent = 'Please enter your email address.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+
+    try{
+      const res = await fetch('/api/ipo-notify-signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, phone })
+      });
+      const result = await res.json();
+      if(!res.ok){
+        errEl.textContent = result.error || 'Something went wrong. Please try again.';
+        errEl.style.display = 'block';
+        return;
+      }
+      document.getElementById('notifyFormView').style.display = 'none';
+      document.getElementById('notifySuccessView').style.display = 'block';
+    } catch(err){
+      errEl.textContent = 'Something went wrong. Please try again.';
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Notify me';
+    }
+  }
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'Escape') closeNotifyModal();
   });
 </script>
 <!-- Brevo Conversations {literal} -->

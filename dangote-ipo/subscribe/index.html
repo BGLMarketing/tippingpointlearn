@@ -706,6 +706,19 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <script>
 const UNIT_PRICE = 525;
 const MIN_UNITS = 50000;
+// Same offer-opening moment as /dangote-ipo — see that page's script
+// for the reasoning. Keep these two constants in sync if the date
+// ever changes.
+const IPO_OFFER_OPENS_AT = new Date('2026-09-14T00:00:00+01:00');
+function isIpoOfferOpen(){ return new Date() >= IPO_OFFER_OPENS_AT; }
+function gateOfferNotOpen(){
+  const entry = document.getElementById('aowEntry');
+  entry.innerHTML = `
+    <h2>Subscriptions open 14 September 2026</h2>
+    <p>The Dangote Refinery IPO isn't open for subscription yet. <a href="/dangote-ipo" style="color:var(--green-deep); font-weight:600;">Read more about the offer</a>, or get notified the moment it opens.</p>
+    <button class="btn btn-primary" onclick="openNotifyModal()">Get notified when it opens</button>
+  `;
+}
 const DOCUMENTS_BUCKET = 'ipo-documents';
 
 const sbUpload = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -749,6 +762,10 @@ function clearPersistedState(){
 }
 
 (function tryResume(){
+  if(!isIpoOfferOpen()){
+    gateOfferNotOpen();
+    return;
+  }
   if(restoreState()){
     document.getElementById('aowEntry').style.display = 'none';
     document.getElementById('aowWizard').style.display = 'block';
@@ -1153,6 +1170,7 @@ function buildSteps(type){
 
 /* ---------- wizard engine (same as /open-account) ---------- */
 function startWizard(){
+  if(!isIpoOfferOpen()){ gateOfferNotOpen(); return; }
   document.getElementById('aowEntry').style.display = 'none';
   document.getElementById('aowWizard').style.display = 'block';
   steps = buildSteps(null);
