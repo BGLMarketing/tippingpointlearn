@@ -2,7 +2,7 @@ const { supabase } = require('./utils/supabaseClient');
 const {
   sendInternalNewSubmissionAlert,
   sendApplicantConfirmationEmail
-} = require('./utils/brevo');
+} = require('./utils/email');
 
 // Documents are uploaded DIRECTLY from the browser to Supabase Storage
 // beforehand (see create-upload-url.js), so this function only ever

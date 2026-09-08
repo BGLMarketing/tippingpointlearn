@@ -95,35 +95,40 @@ other page, so it's a normal Netlify-served page like `/faq` or
   JSON (form field values + the list of already-uploaded document
   paths — no file bytes) to `/.netlify/functions/submit-application`.
   That function writes everything to Supabase (schema in
-  `supabase/schema.sql`) and sends branded Brevo emails (internal alert
-  + applicant confirmation). A genuine failure shows the applicant a
-  plain "couldn't submit, contact clientservices@bglafrica.com" message
-  — it never silently shows a fake success.
+  `supabase/schema.sql`) and sends branded emails via Resend (internal
+  alert + applicant confirmation). A genuine failure shows the
+  applicant a plain "couldn't submit, contact clientservices@bglafrica.com"
+  message — it never silently shows a fake success.
   - **Requires a Git-connected deploy, not drag-and-drop.** Netlify's
     manual drag-and-drop deploy only publishes static files — it does
     not deploy functions. This site must be deployed via a Git-connected
     Netlify site (or the Netlify CLI) for the functions to run.
-  - **Brevo's IP-restriction setting must stay OFF.** Brevo has an
-    optional account-level "Authorize IP addresses only" security
-    feature. If it's ever turned on, it will silently block every
-    email send from these functions — serverless infrastructure like
-    Vercel/Netlify runs from a rotating outbound IP pool, not a single
-    fixed address, so allowlisting individual IPs is not a durable fix
-    and will cause intermittent failures. The account's `BREVO_API_KEY`
-    is the real security boundary here, not IP restriction. (This
-    exact failure mode already happened once — every submission and
-    status-change email silently vanished for a period with zero
-    visible errors, since email failures are intentionally treated as
-    non-fatal so a flaky send never blocks a real submission or status
-    change. `sendEmail()` in `utils/brevo.js` also now throws instead
-    of silently no-op'ing if `BREVO_API_KEY` is missing, which was a
-    second, separate way the same class of silent failure could happen.)
+  - **Email provider**: Resend, not Brevo — despite the rest of the
+    site using Brevo for the waitlist form and live chat, this
+    feature's transactional emails (submission confirmations, status
+    changes) send through Resend instead, authenticated purely by API
+    key with no IP allowlisting involved. This matters specifically
+    because these functions run on serverless infrastructure with a
+    rotating outbound IP pool: Brevo's optional IP-restriction feature
+    was the root cause of every email from this feature silently
+    vanishing for a period — none of it surfaced as a visible error,
+    since `submit-application` and `update-application-status` both
+    intentionally treat email failures as non-fatal (logged, not
+    thrown), so submissions and status changes kept "succeeding" while
+    no email ever went out. `sendEmail()` in `utils/email.js` also now
+    throws instead of silently no-op'ing if `RESEND_API_KEY` is
+    missing, which was a second, independent way the same class of
+    silent failure could happen. **A sending domain must be verified
+    in Resend's dashboard** (adding the DNS records it provides at
+    whatever registrar/DNS host manages the domain) before this will
+    actually deliver to real inboxes — Resend's own test/sandbox
+    domain will not reliably send to arbitrary recipient addresses.
   - **Environment variables** (set in Netlify → Site settings →
     Environment variables, and the equivalent in Vercel → Project
     Settings): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
-    `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`,
-    `LOGO_URL`, `SITE_URL`. See `netlify/functions/utils/brevo.js` (and
-    its identical copy at `api/utils/brevo.js`) for how these are used.
+    `RESEND_API_KEY`, `EMAIL_SENDER_EMAIL`, `EMAIL_SENDER_NAME`,
+    `LOGO_URL`, `SITE_URL`. See `netlify/functions/utils/email.js` (and
+    its identical copy at `api/utils/email.js`) for how these are used.
   - **Supabase setup**: run `supabase/schema.sql` once against a Supabase
     project's SQL editor, and create a private Storage bucket named
     `application-documents`. If `schema.sql` was already run before the

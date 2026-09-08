@@ -1,4 +1,4 @@
-const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
+const RESEND_API_URL = 'https://api.resend.com/emails';
 
 const BRAND = {
   green: '#005E00',
@@ -72,48 +72,45 @@ function button(label, href) {
 }
 
 /**
- * Sends one email via Brevo's API. IMPORTANT: Brevo's account-level
- * "Authorize IP addresses only" security setting must stay OFF for
- * this to work reliably — these functions run on serverless
- * infrastructure with a rotating outbound IP pool, not a single fixed
- * IP, so allowlisting individual IPs is not a durable fix and will
- * cause intermittent silent failures if re-enabled. The API key
- * itself is the real security boundary here.
+ * Sends one email via Resend's API. Resend authenticates purely by
+ * API key — no IP allowlisting involved, which matters specifically
+ * because these functions run on serverless infrastructure with
+ * rotating outbound IPs (Brevo's optional IP-restriction feature was
+ * the root cause of every prior silent send failure on this feature).
  */
 async function sendEmail({ to, subject, html, replyTo }) {
-  const apiKey = process.env.BREVO_API_KEY;
+  const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     // Never silently pretend this succeeded — a missing key is a real
-    // misconfiguration. Every caller in this file is written to let a
-    // thrown error here become visible, rather than reporting success
-    // while nothing was actually sent to anyone.
-    throw new Error('BREVO_API_KEY is not set — cannot send email.');
+    // misconfiguration. Every caller in this file lets a thrown error
+    // here become visible, rather than reporting success while
+    // nothing was actually sent to anyone.
+    throw new Error('RESEND_API_KEY is not set — cannot send email.');
   }
 
-  const payload = {
-    sender: {
-      name: process.env.BREVO_SENDER_NAME || 'BGL Securities',
-      email: process.env.BREVO_SENDER_EMAIL || 'no-reply@bglafrica.com'
-    },
-    to: Array.isArray(to) ? to.map((email) => ({ email })) : [{ email: to }],
-    subject,
-    htmlContent: html
-  };
-  if (replyTo) payload.replyTo = { email: replyTo };
+  const senderName = process.env.EMAIL_SENDER_NAME || 'BGL Securities';
+  const senderEmail = process.env.EMAIL_SENDER_EMAIL || 'no-reply@bglafrica.com';
 
-  const res = await fetch(BREVO_API_URL, {
+  const payload = {
+    from: `${senderName} <${senderEmail}>`,
+    to: Array.isArray(to) ? to : [to],
+    subject,
+    html
+  };
+  if (replyTo) payload.reply_to = replyTo;
+
+  const res = await fetch(RESEND_API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Accept: 'application/json',
-      'api-key': apiKey
+      Authorization: `Bearer ${apiKey}`
     },
     body: JSON.stringify(payload)
   });
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`Brevo send failed (${res.status}): ${errText}`);
+    throw new Error(`Resend send failed (${res.status}): ${errText}`);
   }
 
   return res.json();
