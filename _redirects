@@ -16,3 +16,7 @@
 /api/resend-notification         /.netlify/functions/resend-notification        200
 /api/referral-lookup             /.netlify/functions/referral-lookup            200
 /api/create-referral-code        /.netlify/functions/create-referral-code       200
+/api/ipo-create-upload-url       /.netlify/functions/ipo-create-upload-url      200
+/api/submit-ipo-subscription     /.netlify/functions/submit-ipo-subscription    200
+/api/update-ipo-status           /.netlify/functions/update-ipo-status          200
+/api/ipo-notify-signup           /.netlify/functions/ipo-notify-signup          200
