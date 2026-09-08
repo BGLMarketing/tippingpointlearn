@@ -61,7 +61,13 @@ module.exports = async (req, res) => {
     }
     if (accountType === 'corporate') {
       applicantRows.push(buildApplicantRow(applicationId, 'signatory_1', data?.signatory1));
-      applicantRows.push(buildApplicantRow(applicationId, 'signatory_2', data?.signatory2));
+      // Signatory 2 is optional — some corporate accounts only need
+      // one authorised signatory. Only create a database record for
+      // them if the applicant actually said "Yes" to having one,
+      // rather than inserting an empty phantom row every time.
+      if (data?.signatory2 && data.signatory2.hasSecondSignatory === 'Yes') {
+        applicantRows.push(buildApplicantRow(applicationId, 'signatory_2', data.signatory2));
+      }
     }
     if (applicantRows.length) {
       tasks.push(

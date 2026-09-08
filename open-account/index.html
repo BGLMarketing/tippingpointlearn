@@ -801,6 +801,56 @@ function selectField(prefix,key,label,options,required){
   </div>`;
 }
 
+// Digits-only field with an exact-length requirement (e.g. BVN/NIN,
+// both exactly 11 digits in Nigeria) — enforced in collectStep(),
+// not just visually.
+function digitField(prefix,key,label,digits,required){
+  return `<div class="field">
+    <label>${label}${required?'<span class="req">*</span>':''}</label>
+    <input type="text" inputmode="numeric" maxlength="${digits}" data-field="${prefix}.${key}" data-digits="${digits}" ${required?'data-required="true"':''}>
+    <div class="err-msg">Enter exactly ${digits} digits.</div>
+  </div>`;
+}
+
+// A comprehensive, embedded list of CBN-licensed banks and well-known
+// digital/microfinance banks operating in Nigeria. Deliberately NOT
+// fetched from a live third-party API at runtime — this is a
+// regulated KYC form, and the bank-name field must never depend on an
+// unofficial external service's uptime. "Other" is always available
+// as a fallback for anything not listed.
+const NIGERIAN_BANKS = [
+  'Access Bank','Citibank Nigeria','Coronation Merchant Bank','Ecobank Nigeria',
+  'Fidelity Bank','First Bank of Nigeria','First City Monument Bank (FCMB)',
+  'FSDH Merchant Bank','Globus Bank','Greenwich Merchant Bank',
+  'Guaranty Trust Bank (GTBank)','Heritage Bank','Jaiz Bank','Keystone Bank',
+  'Lotus Bank','Nova Merchant Bank','Optimus Bank','Parallex Bank',
+  'Polaris Bank','Premium Trust Bank','Providus Bank','Rand Merchant Bank',
+  'Signature Bank','Stanbic IBTC Bank','Standard Chartered Bank',
+  'Sterling Bank','SunTrust Bank','TAJ Bank','Titan Trust Bank',
+  'Union Bank of Nigeria','United Bank for Africa (UBA)','Unity Bank',
+  'Wema Bank','Zenith Bank',
+  'Carbon','Hope PSB','Kuda Bank','Mint Finex MFB','Moniepoint MFB',
+  'MoMo PSB (MTN)','9PSB (9mobile)','Opay','PalmPay','Rubies Microfinance Bank',
+  'Smartcash PSB (Airtel)','Sparkle Microfinance Bank','VFD Microfinance Bank'
+];
+
+function bankNameField(prefix){
+  const id = `${prefix}_bankName`;
+  return `<div class="field">
+    <label>Bank name<span class="req">*</span></label>
+    <select data-field="${prefix}.bankName" data-required="true" onchange="toggleConditional('${id}_other_wrap', this.value==='Other')">
+      <option value="">Select</option>
+      ${NIGERIAN_BANKS.map(b=>`<option value="${b}">${b}</option>`).join('')}
+      <option value="Other">Other (not listed)</option>
+    </select>
+    <div class="err-msg">Please select a bank.</div>
+  </div>
+  <div class="field" id="${id}_other_wrap" style="display:none;">
+    <label>Please specify your bank name</label>
+    <input type="text" data-field="${prefix}.bankNameOther">
+  </div>`;
+}
+
 function referralField(prefix){
   return `
   <fieldset>
@@ -1058,6 +1108,10 @@ function toggleConditional(id, show){
   document.getElementById(id).style.display = show ? 'flex' : 'none';
 }
 
+function toggleBlock(id, show){
+  document.getElementById(id).style.display = show ? 'block' : 'none';
+}
+
 function recordConsentTimestamp(prefix, key, checked){
   if(!state[prefix]) state[prefix] = {};
   state[prefix][key] = checked ? new Date().toISOString() : null;
@@ -1065,13 +1119,14 @@ function recordConsentTimestamp(prefix, key, checked){
 
 /* ---------- banking / company steps ---------- */
 function bankingStepHtml(){
+  const isCorporate = state.accountType === 'corporate';
   return `
   <h2 class="aow-step-title">Banking &amp; direct settlement</h2>
   <p class="aow-step-sub">Used to settle proceeds from your investments. Your CSCS Clearing House Number (CHN) isn't needed yet — BGL assigns this once your account is opened.</p>
   <fieldset>
     <legend>Bank details</legend>
     <div class="aow-grid">
-      ${textField('banking','bankName','Bank name',true)}
+      ${bankNameField('banking')}
       ${textField('banking','accountName','Account name',true)}
       ${textField('banking','accountNumber','Account number',true)}
       ${selectField('banking','sourceOfFunds','Source of funds',['Salary','Business income','Investments','Inheritance','Other'],true)}
@@ -1082,8 +1137,8 @@ function bankingStepHtml(){
           <label class="radio-opt"><input type="radio" name="banking_accountType" value="Savings" data-field-radio="banking.accountType"> Savings</label>
         </div>
       </div>
-      ${textField('banking','bvn','BVN',true)}
-      ${textField('banking','nin','NIN',true)}
+      ${digitField('banking','bvn','BVN',11,true)}
+      ${isCorporate ? '' : digitField('banking','nin','NIN',11,true)}
       ${textField('banking','taxId','Tax ID (optional)',false)}
       <div class="field">
         <label>Opt in for CSCS Direct Settlement?<span class="req">*</span></label>
@@ -1129,6 +1184,28 @@ function corporateDocsStepHtml(){
   ${uploadField('company','boardResolution','Board resolution / mandate','If applicable')}
   ${uploadField('company','companySeal','Company seal / stamped signature page','If applicable')}
   `;
+}
+
+function sig2StepHtml(){
+  const has = state.signatory2 && state.signatory2.hasSecondSignatory;
+  return `<h2 class="aow-step-title">Authorised signatory 2</h2>
+  <p class="aow-step-sub">Some corporate accounts only need one authorised signatory — if that's the case here, select "No" below.</p>
+  <fieldset>
+    <legend>Second signatory</legend>
+    <div class="aow-grid single">
+      <div class="field">
+        <label>Does this account have a second authorised signatory?<span class="req">*</span></label>
+        <div class="radio-row">
+          <label class="radio-opt"><input type="radio" name="sig2_has" value="Yes" data-field-radio="signatory2.hasSecondSignatory" onchange="toggleBlock('sig2_fields_wrap', true)"> Yes</label>
+          <label class="radio-opt"><input type="radio" name="sig2_has" value="No" data-field-radio="signatory2.hasSecondSignatory" onchange="toggleBlock('sig2_fields_wrap', false)"> No</label>
+        </div>
+      </div>
+    </div>
+  </fieldset>
+  <div id="sig2_fields_wrap" style="display:${has === 'Yes' ? 'block' : 'none'};">
+    ${personalFields('signatory2')}
+    ${pepFields('signatory2')}
+  </div>`;
 }
 
 function jointPartnerStepHtml(){
@@ -1182,7 +1259,13 @@ function reviewStepHtml(){
       ${reviewRow('Email', f.company.email)}
     </div>`;
     html += personReviewGroup('Authorised signatory 1', f.signatory1, 2);
-    html += personReviewGroup('Authorised signatory 2', f.signatory2, 3);
+    if(f.signatory2 && f.signatory2.hasSecondSignatory === 'Yes'){
+      html += personReviewGroup('Authorised signatory 2', f.signatory2, 3);
+    } else {
+      html += `<div class="review-group"><h4>Authorised signatory 2 <span class="edit-link" onclick="jumpToStep(3)">Edit</span></h4>
+        ${reviewRow('Second signatory', 'None')}
+      </div>`;
+    }
   }
 
   html += `<div class="review-group"><h4>Banking <span class="edit-link" onclick="jumpToStep(getBankingStepIndex())">Edit</span></h4>
@@ -1257,12 +1340,15 @@ function buildSteps(type){
   } else if(type === 'corporate'){
     s.push({id:'company', title:'Company information', render: ()=>companyStepHtml() + referralField('account') });
     s.push({id:'sig1', title:'Signatory 1', render: ()=>`<h2 class="aow-step-title">Authorised signatory 1</h2><p class="aow-step-sub">One of two people authorised to operate this account.</p>` + personalFields('signatory1') + pepFields('signatory1') });
-    s.push({id:'sig2', title:'Signatory 2', render: ()=>`<h2 class="aow-step-title">Authorised signatory 2</h2><p class="aow-step-sub">The second authorised signatory.</p>` + personalFields('signatory2') + pepFields('signatory2') });
+    s.push({id:'sig2', title:'Signatory 2', render: sig2StepHtml });
     s.push({id:'banking', title:'Banking', render: bankingStepHtml });
-    s.push({id:'docs', title:'Documents', render: ()=>`<h2 class="aow-step-title">Documents</h2><p class="aow-step-sub">Upload company and signatory documents.</p>` +
+    s.push({id:'docs', title:'Documents', render: ()=>{
+      const hasSig2 = state.signatory2 && state.signatory2.hasSecondSignatory === 'Yes';
+      return `<h2 class="aow-step-title">Documents</h2><p class="aow-step-sub">Upload company and signatory documents.</p>` +
       `<p style="font-weight:600;font-size:13px;color:rgba(22,36,26,0.6);margin:0 0 8px;">Signatory 1</p>` + documentFields('signatory1') +
-      `<p style="font-weight:600;font-size:13px;color:rgba(22,36,26,0.6);margin:24px 0 8px;">Signatory 2</p>` + documentFields('signatory2') +
-      corporateDocsStepHtml() });
+      (hasSig2 ? `<p style="font-weight:600;font-size:13px;color:rgba(22,36,26,0.6);margin:24px 0 8px;">Signatory 2</p>` + documentFields('signatory2') : '') +
+      corporateDocsStepHtml();
+    } });
   }
   s.push({id:'review', title:'Review & submit', render: reviewStepHtml });
   return s;
@@ -1343,10 +1429,24 @@ function collectStep(){
     if(!state[group]) state[group] = {};
     const val = el.type === 'checkbox' ? el.checked : el.value.trim();
     state[group][key] = val;
-    const isRequired = el.dataset.required === 'true';
+
+    // A field hidden by a conditional toggle (display:none on itself
+    // or an ancestor) is never enforced as required — this is what
+    // lets e.g. an optional second signatory's fields stay genuinely
+    // optional when that section is collapsed, rather than silently
+    // blocking submission for a field the applicant can't even see.
+    const isVisible = el.offsetParent !== null;
+    const isRequired = el.dataset.required === 'true' && isVisible;
     const fieldWrap = el.closest('.field');
     const empty = !val;
-    if(isRequired && empty){
+
+    // Exact-digit-length fields (BVN/NIN) — invalid format blocks
+    // progress even if technically non-empty, and even if the field
+    // isn't marked required (a malformed value is never acceptable).
+    const digits = el.dataset.digits;
+    const formatOk = !digits || !val || new RegExp(`^\\d{${digits}}$`).test(val);
+
+    if((isRequired && empty) || (isVisible && !formatOk)){
       valid = false;
       if(fieldWrap) fieldWrap.classList.add('invalid');
     } else if(fieldWrap){
@@ -1360,13 +1460,15 @@ function collectStep(){
   });
 
   // Required document uploads — a missing one is just as invalid as a
-  // missing required text field, but wasn't being checked at all before,
-  // which meant it was possible to submit with no attachments.
+  // missing required text field. Hidden ones (e.g. an optional second
+  // signatory's documents, when that section is collapsed) are not
+  // enforced, same reasoning as above.
   document.querySelectorAll('.upload[data-doc-required="true"]').forEach(wrap=>{
     const prefix = wrap.dataset.prefix;
     const key = wrap.dataset.dockey;
+    const isVisible = wrap.offsetParent !== null;
     const uploaded = state.files[prefix] && state.files[prefix][key];
-    if(!uploaded){
+    if(isVisible && !uploaded){
       valid = false;
       wrap.classList.add('invalid');
     } else {
