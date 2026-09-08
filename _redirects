@@ -10,13 +10,11 @@
 # currently live. On Netlify, this redirect routes those calls to the
 # actual functions in netlify/functions/.
 /api/submit-application         /.netlify/functions/submit-application         200
-/api/create-upload-url          /.netlify/functions/create-upload-url          200
-/api/update-application-status  /.netlify/functions/update-application-status  200
+/api/upload-url                 /.netlify/functions/upload-url                 200
+/api/update-status              /.netlify/functions/update-status              200
 /api/track-application           /.netlify/functions/track-application          200
 /api/resend-notification         /.netlify/functions/resend-notification        200
 /api/referral-lookup             /.netlify/functions/referral-lookup            200
 /api/create-referral-code        /.netlify/functions/create-referral-code       200
-/api/ipo-create-upload-url       /.netlify/functions/ipo-create-upload-url      200
 /api/submit-ipo-subscription     /.netlify/functions/submit-ipo-subscription    200
-/api/update-ipo-status           /.netlify/functions/update-ipo-status          200
 /api/ipo-notify-signup           /.netlify/functions/ipo-notify-signup          200

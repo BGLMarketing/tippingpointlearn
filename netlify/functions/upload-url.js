@@ -1,20 +1,25 @@
 const { supabase } = require('./utils/supabaseClient');
 
-const STORAGE_BUCKET = 'application-documents';
 const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'application/pdf'];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB — matches the frontend's own cap
 
-// Returns a short-lived signed upload URL + token for one file. The
-// browser then uploads the file bytes DIRECTLY to Supabase Storage
-// using that token — the file never passes through this function or
-// through submit-application, so neither is bound by Netlify's ~6MB
-// function request-size limit. This function's own request/response
-// is tiny (just metadata), so it runs in well under a second.
+// Merged from create-upload-url.js (account opening) and
+// ipo-create-upload-url.js (Dangote IPO subscription) to stay under
+// Vercel Hobby's 12-serverless-function-per-deployment cap. Both did
+// exactly the same thing — mint a short-lived signed upload URL so the
+// browser can upload directly to Supabase Storage, bypassing the
+// platform's function request-size limit entirely — differing only in
+// which bucket and whether a `person` field applies, so this
+// dispatches on `domain` instead of duplicating the logic.
 //
 // The signed token itself is the authorization for that one upload —
 // the browser's own Supabase session (anon key) needs no storage
-// write permission at all, so this stays safe without opening up
-// public write access to the bucket.
+// write permission at all.
+
+const DOMAINS = {
+  account: { bucket: 'application-documents', requiresPerson: true },
+  ipo: { bucket: 'ipo-documents', requiresPerson: false }
+};
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -28,10 +33,18 @@ exports.handler = async (event) => {
     return jsonResponse(400, { error: 'Malformed request body.' });
   }
 
-  const { sessionId, person, docKey, filename, mimeType, fileSize } = body;
+  const { domain, sessionId, person, docKey, filename, mimeType, fileSize } = body;
 
-  if (!sessionId || !person || !docKey || !filename) {
-    return jsonResponse(400, { error: 'sessionId, person, docKey, and filename are all required.' });
+  const config = DOMAINS[domain];
+  if (!config) {
+    return jsonResponse(400, { error: `domain must be one of: ${Object.keys(DOMAINS).join(', ')}.` });
+  }
+  if (!sessionId || !docKey || !filename || (config.requiresPerson && !person)) {
+    return jsonResponse(400, {
+      error: config.requiresPerson
+        ? 'sessionId, person, docKey, and filename are all required.'
+        : 'sessionId, docKey, and filename are all required.'
+    });
   }
   if (mimeType && !ALLOWED_MIME_TYPES.includes(mimeType)) {
     return jsonResponse(400, { error: 'Only PNG, JPG, or PDF files are accepted.' });
@@ -41,11 +54,13 @@ exports.handler = async (event) => {
   }
 
   const safeSessionId = String(sessionId).replace(/[^a-zA-Z0-9-]/g, '');
-  const path = `pending/${safeSessionId}/${person}_${docKey}_${Date.now()}_${sanitizeFilename(filename)}`;
+  const path = config.requiresPerson
+    ? `pending/${safeSessionId}/${person}_${docKey}_${Date.now()}_${sanitizeFilename(filename)}`
+    : `pending/${safeSessionId}/${docKey}_${Date.now()}_${sanitizeFilename(filename)}`;
 
   try {
     const { data, error } = await supabase.storage
-      .from(STORAGE_BUCKET)
+      .from(config.bucket)
       .createSignedUploadUrl(path);
 
     if (error) throw error;
@@ -56,7 +71,7 @@ exports.handler = async (event) => {
       signedUrl: data.signedUrl
     });
   } catch (err) {
-    console.error('create-upload-url error:', err);
+    console.error('upload-url error:', err);
     return jsonResponse(500, { error: 'Could not prepare the upload. Please try again.' });
   }
 };

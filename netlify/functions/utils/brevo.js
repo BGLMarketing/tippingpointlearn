@@ -180,7 +180,7 @@ async function sendApplicantConfirmationEmail({ applicantEmail, applicantName, a
 }
 
 /* ============================================================
-   Status-change emails (sent by update-application-status)
+   Status-change emails (sent by update-status)
    ============================================================ */
 
 async function sendApplicantUnderReviewEmail({ applicantEmail, applicantName, applicationReference }) {

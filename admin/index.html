@@ -1562,10 +1562,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
   async function callStatusUpdate(payload){
     const token = await getAuthToken();
-    const res = await fetch('/api/update-application-status', {
+    const res = await fetch('/api/update-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ domain: 'account', ...payload })
     });
     const result = await res.json();
     if(!res.ok) throw new Error(result.error || 'Something went wrong.');
@@ -1854,10 +1854,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
   async function callIpoStatusUpdate(payload){
     const token = await getAuthToken();
-    const res = await fetch('/api/update-ipo-status', {
+    const res = await fetch('/api/update-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ domain: 'ipo', ...payload })
     });
     const result = await res.json();
     if(!res.ok) throw new Error(result.error || 'Something went wrong.');

@@ -5,7 +5,7 @@ const {
 } = require('./utils/brevo');
 
 // Documents are uploaded DIRECTLY from the browser to Supabase Storage
-// beforehand (see create-upload-url.js), so this function only ever
+// beforehand (see upload-url.js), so this function only ever
 // receives small JSON — accountType, form data, and a list of
 // {person, docKey, path, fileName, fileType, fileSize} for documents
 // that are already sitting in storage.

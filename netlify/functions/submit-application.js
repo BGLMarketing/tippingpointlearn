@@ -5,7 +5,7 @@ const {
 } = require('./utils/brevo');
 
 // Documents are uploaded DIRECTLY from the browser to Supabase Storage
-// beforehand (see create-upload-url.js), so this function only ever
+// beforehand (see upload-url.js), so this function only ever
 // receives small JSON — accountType, form data, and a list of
 // {person, docKey, path, fileName, fileType, fileSize} for documents
 // that are already sitting in storage. There's no multipart parsing
@@ -98,7 +98,7 @@ exports.handler = async (event) => {
     }
 
     // 4. Document records — files are already uploaded to storage by
-    // this point (via create-upload-url.js + the browser's direct
+    // this point (via upload-url.js + the browser's direct
     // upload), so this is just recording where each one landed.
     if (docs.length) {
       const documentRows = docs.map((d) => ({

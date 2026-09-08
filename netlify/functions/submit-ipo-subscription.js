@@ -2,7 +2,7 @@ const { supabase } = require('./utils/supabaseClient');
 const { sendIpoSubmissionReceivedEmail, sendIpoInternalAlert } = require('./utils/ipoEmail');
 
 // Documents (signature, valid ID, payment evidence) are uploaded
-// directly to Supabase Storage beforehand via ipo-create-upload-url.js
+// directly to Supabase Storage beforehand via upload-url.js
 // — this function only receives small JSON, same pattern as
 // submit-application.js for the account opening feature.
 

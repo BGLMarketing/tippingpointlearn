@@ -908,10 +908,10 @@ async function handleFile(key, input, id){
   updateNextButtonState();
 
   try{
-    const urlRes = await fetch('/api/ipo-create-upload-url', {
+    const urlRes = await fetch('/api/upload-url', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: uploadSessionId, docKey: key, filename: file.name, mimeType: file.type, fileSize: file.size })
+      body: JSON.stringify({ domain: 'ipo', sessionId: uploadSessionId, docKey: key, filename: file.name, mimeType: file.type, fileSize: file.size })
     });
     const urlResult = await urlRes.json();
     if(!urlRes.ok) throw new Error(urlResult.error || 'Could not prepare the upload.');

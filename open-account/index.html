@@ -717,7 +717,7 @@ const RISK_DISCLOSURE_URL = '/assets/Risk_Disclosure_Statement.pdf';
 const DOCUMENTS_BUCKET = 'application-documents';
 
 // One anon-key Supabase client, used only to perform direct-to-storage
-// uploads via a signed token minted by create-upload-url.js. This key
+// uploads via a signed token minted by upload-url.js. This key
 // grants no write access on its own — the signed token is what
 // authorizes each individual upload.
 const sbUpload = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -1090,7 +1090,7 @@ function uploadField(prefix, key, label, hint){
 }
 
 // Files upload directly from the browser to Supabase Storage (via a
-// signed URL minted by create-upload-url.js), bypassing Netlify's
+// signed URL minted by upload-url.js), bypassing Netlify's
 // function request-size limit entirely — these caps are now purely
 // about keeping uploads fast and storage costs sane, not a hard
 // platform ceiling.
@@ -1175,10 +1175,11 @@ async function handleFile(prefix, key, input, id){
   updateNextButtonState();
 
   try{
-    const urlRes = await fetch('/api/create-upload-url', {
+    const urlRes = await fetch('/api/upload-url', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        domain: 'account',
         sessionId: uploadSessionId,
         person: prefix,
         docKey: key,

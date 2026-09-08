@@ -91,7 +91,7 @@ other page, so it's a normal Netlify-served page like `/faq` or
 - **Document uploads**: each file is uploaded **directly from the
   browser to Supabase Storage** as soon as it's selected, not sent
   through a Netlify Function. The flow: the browser asks
-  `netlify/functions/create-upload-url.js` for a short-lived signed
+  `netlify/functions/upload-url.js` for a short-lived signed
   upload URL (that function's own request/response is tiny — no file
   bytes touch it), then uses the Supabase JS client
   (`uploadToSignedUrl`) to upload the file straight to the private
@@ -125,7 +125,7 @@ other page, so it's a normal Netlify-served page like `/faq` or
     intermittent failures that are very hard to diagnose (this exact
     thing already happened once: every submission and status-change
     email silently vanished for a period with zero visible errors,
-    since `submit-application` and `update-application-status` both
+    since `submit-application` and `update-status` both
     intentionally treat email failures as non-fatal — logged, not
     thrown — so a flaky send never blocks a real submission or status
     change, but also never surfaces on its own). The `BREVO_API_KEY`
@@ -154,7 +154,7 @@ other page, so it's a normal Netlify-served page like `/faq` or
     to move an application `submitted → under_review → opened/rejected`.
     Marking an application **opened** requires a CHN and CSCS Account
     Number; **rejecting** requires a reason of at least 10 characters —
-    both are enforced in `netlify/functions/update-application-status.js`,
+    both are enforced in `netlify/functions/update-status.js`,
     which also sends the applicant the matching status email and writes
     the audit trail row. The admin page never writes these tables
     directly — only that function does, using the service role key, so
@@ -273,7 +273,7 @@ fields.
   valid ID, payment evidence.
 - **Document uploads**: same signed-URL pattern as account opening,
   but into a separate private bucket, `ipo-documents`, via
-  `ipo-create-upload-url.js` — kept separate from
+  `upload-url.js` (passing `domain: 'ipo'`) — kept separate from
   `application-documents` since these are a different document set
   tied to a different table.
 - **Submission**: `submit-ipo-subscription.js` validates the unit-count
@@ -293,8 +293,9 @@ fields.
 - **Status pipeline**: `payment_pending` → `payment_confirmed` or
   `payment_unconfirmed` (applicant emailed either way) →
   `pending_execution` → `executed` → `allotted`. Enforced in
-  `update-ipo-status.js`, admin-only (same Supabase Auth bearer-token
-  check as `update-application-status.js`). Marking
+  `update-status.js` (passing `domain: 'ipo'`), admin-only (same
+  Supabase Auth bearer-token check as the account-applications side of
+  that same file). Marking
   **payment_unconfirmed** requires a note of at least 5 characters
   (emailed to the applicant so they know what to fix); marking
   **allotted** requires a final units-allotted number. `pending_execution`
@@ -307,7 +308,7 @@ fields.
   uploaded documents via short-lived signed URLs, and full status
   history), and the status-change actions described above. Same
   pattern as the "Account applications" tab: the admin page never
-  writes `ipo_subscriptions` directly, only `update-ipo-status.js`
+  writes `ipo_subscriptions` directly, only `update-status.js`
   does, using the service role key.
   - **No resend-notification action yet** for IPO subscriptions —
     unlike account applications, there's no
@@ -370,3 +371,37 @@ this GitHub repo as a new project, set the same environment variables
 listed above (Vercel → Project Settings → Environment Variables), deploy,
 verify on the `*.vercel.app` preview URL, then point `tippingpoint.bglafrica.com`'s
 DNS at Vercel (Vercel's domain settings will show the exact records to add).
+
+### Vercel Hobby's 12-function limit
+
+Vercel's free (Hobby) plan caps a deployment at **12 Serverless
+Functions**, counted from the files directly under `api/` (each file
+= one function; files under `api/utils/` don't count, since they're
+imported helpers, not their own endpoints). This repo currently sits
+at **9** — comfortably under, but worth knowing before adding new
+endpoints.
+
+Two originally-separate endpoint pairs were merged into one file each
+specifically to stay under this cap:
+
+- `upload-url.js` — merged from the account-opening and Dangote IPO
+  upload-URL functions (`create-upload-url.js` + `ipo-create-upload-url.js`).
+  Takes a `domain: 'account' | 'ipo'` field in the request body to pick
+  the right storage bucket and required fields.
+- `update-status.js` — merged from the account-opening and Dangote IPO
+  status-update functions (`update-application-status.js` +
+  `update-ipo-status.js`). Takes a `domain: 'account' | 'ipo'` field;
+  internally it's still two fully separate handler functions
+  (`handleApplicationStatus` / `handleIpoStatus`) sharing only the
+  admin-auth check — merging the *file* was what mattered for the
+  function count, not merging the logic.
+
+**If a future feature needs a genuinely new endpoint**, either extend
+one of these two dispatcher files with another `domain` value if it's
+a natural fit (another upload flow, another status pipeline), or add a
+new file if it's not — just keep an eye on the count staying under 12
+if this project is still on Vercel Hobby. `find api -type f -not -path
+"*/utils/*" | wc -l` gives the current count. The `netlify/functions/`
+copy of each file must stay in sync either way (see "Runs on Netlify
+or Vercel" above) — Netlify has no equivalent function-count cap, so
+this constraint is Vercel-specific.

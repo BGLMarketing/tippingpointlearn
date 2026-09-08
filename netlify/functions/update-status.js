@@ -4,8 +4,23 @@ const {
   sendApplicantOpenedEmail,
   sendApplicantRejectedEmail
 } = require('./utils/brevo');
+const {
+  sendIpoPaymentConfirmedEmail,
+  sendIpoPaymentUnconfirmedEmail,
+  sendIpoExecutedEmail,
+  sendIpoAllottedEmail
+} = require('./utils/ipoEmail');
 
-const VALID_TRANSITIONS = ['under_review', 'opened', 'rejected'];
+// Merged from update-application-status.js and update-ipo-status.js
+// to stay under Vercel Hobby's 12-serverless-function-per-deployment
+// cap. Both did the same shape of work (verify the caller is a
+// logged-in admin, validate a status transition, update a row, log an
+// audit-trail row, send a status-change email) against two different
+// tables — this file shares just the admin auth check and otherwise
+// keeps each handler's logic unchanged, dispatching on `domain`.
+
+const APPLICATION_TRANSITIONS = ['under_review', 'opened', 'rejected'];
+const IPO_TRANSITIONS = ['payment_confirmed', 'payment_unconfirmed', 'pending_execution', 'executed', 'allotted'];
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -14,10 +29,9 @@ exports.handler = async (event) => {
 
   // ---- Authenticate the caller as a logged-in admin ----
   // The admin dashboard sends the Supabase Auth access token it already
-  // holds from signing in (the same session used to read the Learn
-  // articles table). Verifying it here — server-side, with the service
-  // role client — means only a real logged-in admin can trigger a status
-  // change, an email, and an audit trail entry.
+  // holds from signing in. Verifying it here — server-side, with the
+  // service role client — means only a real logged-in admin can trigger
+  // a status change, an email, and an audit trail entry.
   const authHeader = event.headers.authorization || event.headers.Authorization;
   const token = authHeader && authHeader.replace(/^Bearer\s+/i, '');
   if (!token) {
@@ -30,7 +44,6 @@ exports.handler = async (event) => {
   }
   const adminEmail = userData.user.email;
 
-  // ---- Parse + validate the request ----
   let body;
   try {
     body = JSON.parse(event.body || '{}');
@@ -38,11 +51,17 @@ exports.handler = async (event) => {
     return jsonResponse(400, { error: 'Malformed request body.' });
   }
 
+  if (body.domain === 'ipo') return handleIpoStatus(adminEmail, body);
+  if (body.domain === 'account') return handleApplicationStatus(adminEmail, body);
+  return jsonResponse(400, { error: "domain must be 'account' or 'ipo'." });
+};
+
+async function handleApplicationStatus(adminEmail, body) {
   const { applicationId, newStatus, chn, cscAccountNumber, adminNote, rejectionReason } = body;
 
-  if (!applicationId || !VALID_TRANSITIONS.includes(newStatus)) {
+  if (!applicationId || !APPLICATION_TRANSITIONS.includes(newStatus)) {
     return jsonResponse(400, {
-      error: `applicationId and a valid newStatus (${VALID_TRANSITIONS.join(', ')}) are required.`
+      error: `applicationId and a valid newStatus (${APPLICATION_TRANSITIONS.join(', ')}) are required.`
     });
   }
   if (newStatus === 'opened' && (!chn || !cscAccountNumber)) {
@@ -62,7 +81,6 @@ exports.handler = async (event) => {
       return jsonResponse(404, { error: 'Application not found.' });
     }
 
-    // ---- Build the update payload for this transition ----
     const update = { status: newStatus };
     if (newStatus === 'under_review') {
       update.review_started_at = new Date().toISOString();
@@ -85,7 +103,6 @@ exports.handler = async (event) => {
       .eq('id', applicationId);
     if (updateErr) throw updateErr;
 
-    // ---- Audit trail ----
     await supabase.from('application_status_history').insert({
       application_id: applicationId,
       status: newStatus,
@@ -93,7 +110,6 @@ exports.handler = async (event) => {
       reason: newStatus === 'rejected' ? rejectionReason : (adminNote || null)
     });
 
-    // ---- Notify the applicant (best-effort — doesn't fail the request) ----
     if (appRow.applicant_email) {
       try {
         if (newStatus === 'under_review') {
@@ -125,10 +141,82 @@ exports.handler = async (event) => {
 
     return jsonResponse(200, { ok: true, status: newStatus });
   } catch (err) {
-    console.error('update-application-status error:', err);
+    console.error('update-status (account) error:', err);
     return jsonResponse(500, { error: 'Something went wrong updating the application. Please try again.' });
   }
-};
+}
+
+async function handleIpoStatus(adminEmail, body) {
+  const { subscriptionId, newStatus, note, unitsAllotted } = body;
+
+  if (!subscriptionId || !IPO_TRANSITIONS.includes(newStatus)) {
+    return jsonResponse(400, {
+      error: `subscriptionId and a valid newStatus (${IPO_TRANSITIONS.join(', ')}) are required.`
+    });
+  }
+  if (newStatus === 'payment_unconfirmed' && (!note || note.trim().length < 5)) {
+    return jsonResponse(400, { error: 'A short note explaining why payment could not be confirmed is required.' });
+  }
+  if (newStatus === 'allotted' && !unitsAllotted) {
+    return jsonResponse(400, { error: 'Units allotted is required to mark a subscription as allotted.' });
+  }
+
+  try {
+    const { data: subRow, error: fetchErr } = await supabase
+      .from('ipo_subscriptions')
+      .select('*')
+      .eq('id', subscriptionId)
+      .single();
+    if (fetchErr || !subRow) {
+      return jsonResponse(404, { error: 'Subscription not found.' });
+    }
+
+    const update = { status: newStatus, status_changed_at: new Date().toISOString(), status_changed_by: adminEmail };
+    if (note) update.admin_note = note;
+    if (newStatus === 'allotted') update.units_allotted = unitsAllotted;
+
+    const { error: updateErr } = await supabase
+      .from('ipo_subscriptions')
+      .update(update)
+      .eq('id', subscriptionId);
+    if (updateErr) throw updateErr;
+
+    await supabase.from('ipo_subscription_status_history').insert({
+      subscription_id: subscriptionId,
+      status: newStatus,
+      changed_by: adminEmail,
+      note: note || null
+    });
+
+    if (subRow.applicant_email) {
+      try {
+        const common = {
+          applicantEmail: subRow.applicant_email,
+          applicantName: subRow.applicant_name,
+          subscriptionReference: subRow.subscription_reference
+        };
+        if (newStatus === 'payment_confirmed') {
+          await sendIpoPaymentConfirmedEmail(common);
+        } else if (newStatus === 'payment_unconfirmed') {
+          await sendIpoPaymentUnconfirmedEmail({ ...common, note });
+        } else if (newStatus === 'executed') {
+          await sendIpoExecutedEmail(common);
+        } else if (newStatus === 'allotted') {
+          await sendIpoAllottedEmail({ ...common, unitsAllotted });
+        }
+        // pending_execution intentionally sends no email — a quiet
+        // intermediate step between payment confirmation and execution.
+      } catch (emailErr) {
+        console.error('IPO status-change notification email failed:', emailErr);
+      }
+    }
+
+    return jsonResponse(200, { ok: true, status: newStatus });
+  } catch (err) {
+    console.error('update-status (ipo) error:', err);
+    return jsonResponse(500, { error: 'Something went wrong updating the subscription. Please try again.' });
+  }
+}
 
 function jsonResponse(statusCode, body) {
   return {

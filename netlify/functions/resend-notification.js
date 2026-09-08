@@ -10,7 +10,7 @@ const {
 // stored status — used to backfill applicants who were updated before
 // a fix to the email content (e.g. the CSCS Account Number that was
 // missing from the "opened" email), or whose original send failed.
-// Admin-only, same auth check as update-application-status.
+// Admin-only, same auth check as update-status.
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
