@@ -572,6 +572,12 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   .status-under_review{ background:rgba(226,160,64,0.16); color:#8a5c1e; }
   .status-opened{ background:rgba(51,153,102,0.14); color:var(--green-deep); }
   .status-rejected{ background:rgba(179,69,47,0.12); color:#b3452f; }
+  .status-payment_pending{ background:var(--paper-dim); border:1px solid var(--line-dark); color:rgba(22,36,26,0.6); }
+  .status-payment_confirmed{ background:rgba(51,153,102,0.14); color:var(--green-deep); }
+  .status-payment_unconfirmed{ background:rgba(179,69,47,0.12); color:#b3452f; }
+  .status-pending_execution{ background:rgba(226,160,64,0.16); color:#8a5c1e; }
+  .status-executed{ background:rgba(51,153,102,0.14); color:var(--green-deep); }
+  .status-allotted{ background:rgba(226,160,64,0.28); color:#8a5c1e; font-weight:700; }
   .table-actions{ display:flex; gap:8px; }
   .link-btn{
     background:none; border:none; cursor:pointer;
@@ -748,6 +754,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <button class="tab-btn active" id="tab-articles" onclick="switchTab('articles')">Learn articles</button>
       <button class="tab-btn" id="tab-applications" onclick="switchTab('applications')">Account applications</button>
       <button class="tab-btn" id="tab-referrals" onclick="switchTab('referrals')">Referral codes</button>
+      <button class="tab-btn" id="tab-ipo" onclick="switchTab('ipo')">Dangote IPO</button>
     </div>
 
     <div id="articles-panel">
@@ -866,6 +873,42 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       </table>
     </div>
 
+    <div id="ipo-panel" hidden>
+
+      <div id="ipo-list-view">
+        <div class="filter-row">
+          <div class="field">
+            <label for="ipo-status-filter">Status</label>
+            <select id="ipo-status-filter" onchange="loadIpoSubscriptions()">
+              <option value="">All statuses</option>
+              <option value="payment_pending">Payment pending</option>
+              <option value="payment_confirmed">Payment confirmed</option>
+              <option value="payment_unconfirmed">Payment unconfirmed</option>
+              <option value="pending_execution">Pending execution</option>
+              <option value="executed">Executed</option>
+              <option value="allotted">Allotted</option>
+            </select>
+          </div>
+          <div class="field grow">
+            <label for="ipo-search">Search</label>
+            <input type="text" id="ipo-search" placeholder="Name, email, or reference" oninput="loadIpoSubscriptions()">
+          </div>
+        </div>
+
+        <table class="article-table">
+          <thead>
+            <tr><th>Reference</th><th>Applicant</th><th>Type</th><th>Units</th><th>Amount</th><th>Date</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody id="ipo-table-body">
+            <tr class="empty-row"><td colspan="8">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="ipo-detail-view" hidden></div>
+
+    </div>
+
   </div>
 
 </div>
@@ -907,6 +950,42 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     </div>
     <button class="btn btn-primary" style="width:100%; padding:13px; background:#b3452f;" onclick="confirmReject()">Reject application</button>
     <div class="form-status" id="reject-modal-status"></div>
+  </div>
+</div>
+
+<!-- ===== Payment unconfirmed modal (IPO) ===== -->
+<div class="modal-overlay" id="ipoUnconfirmedModalOverlay" onclick="if(event.target===this) closeIpoUnconfirmedModal()">
+  <div class="modal" role="dialog" aria-modal="true">
+    <button class="modal-close" onclick="closeIpoUnconfirmedModal()" aria-label="Close">✕</button>
+    <div class="eyebrow">Payment not confirmed</div>
+    <h3>Mark payment unconfirmed</h3>
+    <p class="sub">The applicant will be emailed this note, so keep it clear and specific about what's needed from them.</p>
+    <div class="field">
+      <label for="ipo-unconfirmed-note">Reason / what's needed</label>
+      <textarea id="ipo-unconfirmed-note" style="min-height:90px;"></textarea>
+    </div>
+    <button class="btn btn-primary" style="width:100%; padding:13px; background:#b3452f;" onclick="confirmIpoUnconfirmed()">Mark payment unconfirmed</button>
+    <div class="form-status" id="ipo-unconfirmed-modal-status"></div>
+  </div>
+</div>
+
+<!-- ===== Mark allotted modal (IPO) ===== -->
+<div class="modal-overlay" id="ipoAllottedModalOverlay" onclick="if(event.target===this) closeIpoAllottedModal()">
+  <div class="modal" role="dialog" aria-modal="true">
+    <button class="modal-close" onclick="closeIpoAllottedModal()" aria-label="Close">✕</button>
+    <div class="eyebrow">Allotment</div>
+    <h3>Mark as allotted</h3>
+    <p class="sub">Enter the final number of units allotted. This will email the applicant their allotment.</p>
+    <div class="field">
+      <label for="ipo-allotted-units">Units allotted</label>
+      <input type="number" id="ipo-allotted-units" min="1" step="1">
+    </div>
+    <div class="field">
+      <label for="ipo-allotted-note">Optional note</label>
+      <textarea id="ipo-allotted-note" style="min-height:70px;"></textarea>
+    </div>
+    <button class="btn btn-primary" style="width:100%; padding:13px;" onclick="confirmIpoAllotted()">Confirm allotment</button>
+    <div class="form-status" id="ipo-allotted-modal-status"></div>
   </div>
 </div>
 
@@ -1234,15 +1313,18 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     document.getElementById('tab-articles').classList.toggle('active', tab === 'articles');
     document.getElementById('tab-applications').classList.toggle('active', tab === 'applications');
     document.getElementById('tab-referrals').classList.toggle('active', tab === 'referrals');
+    document.getElementById('tab-ipo').classList.toggle('active', tab === 'ipo');
     document.getElementById('articles-panel').hidden = tab !== 'articles';
     document.getElementById('applications-panel').hidden = tab !== 'applications';
     document.getElementById('referrals-panel').hidden = tab !== 'referrals';
+    document.getElementById('ipo-panel').hidden = tab !== 'ipo';
 
-    const titles = { articles: 'Manage articles', applications: 'Account opening applications', referrals: 'Referral codes' };
+    const titles = { articles: 'Manage articles', applications: 'Account opening applications', referrals: 'Referral codes', ipo: 'Dangote IPO subscriptions' };
     document.getElementById('dashboard-title').textContent = titles[tab];
 
     if(tab === 'applications') loadApplications();
     if(tab === 'referrals') loadReferralCodes();
+    if(tab === 'ipo') loadIpoSubscriptions();
   };
 
   /* ============================================================
@@ -1551,6 +1633,314 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       await callStatusUpdate({ applicationId: currentApplication.id, newStatus: 'rejected', rejectionReason });
       closeRejectModal();
       await viewApplication(currentApplication.id);
+    } catch(err){
+      statusEl.textContent = err.message;
+      statusEl.className = 'form-status error';
+    }
+  };
+
+  /* ============================================================
+     DANGOTE IPO SUBSCRIPTIONS
+     ============================================================ */
+  let currentIpoSubscription = null;
+
+  function formatNaira(n){
+    if(n === null || n === undefined) return '—';
+    return '₦' + Number(n).toLocaleString('en-NG');
+  }
+
+  async function loadIpoSubscriptions(){
+    const listView = document.getElementById('ipo-list-view');
+    const detailView = document.getElementById('ipo-detail-view');
+    listView.hidden = false;
+    detailView.hidden = true;
+
+    const tbody = document.getElementById('ipo-table-body');
+    const statusFilter = document.getElementById('ipo-status-filter').value;
+    const search = document.getElementById('ipo-search').value.trim().toLowerCase();
+
+    let query = sb.from('ipo_subscriptions').select('*').order('submitted_at', { ascending: false });
+    if(statusFilter) query = query.eq('status', statusFilter);
+
+    const { data, error } = await query;
+    if(error){
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="8">Error loading subscriptions: ${escapeHtml(error.message)}</td></tr>`;
+      return;
+    }
+
+    let rows = data || [];
+    if(search){
+      rows = rows.filter(r =>
+        (r.applicant_name || '').toLowerCase().includes(search) ||
+        (r.applicant_email || '').toLowerCase().includes(search) ||
+        (r.subscription_reference || '').toLowerCase().includes(search)
+      );
+    }
+
+    if(rows.length === 0){
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="8">No subscriptions match.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = rows.map(s => {
+      const date = new Date(s.submitted_at).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+      return `<tr>
+        <td style="font-family:'IBM Plex Mono', monospace; font-size:12.5px;">${escapeHtml(s.subscription_reference)}</td>
+        <td>${escapeHtml(s.applicant_name || '—')}</td>
+        <td style="text-transform:capitalize;">${escapeHtml(s.investor_type)}</td>
+        <td>${s.number_of_units ? Number(s.number_of_units).toLocaleString() : '—'}</td>
+        <td>${formatNaira(s.amount_payable)}</td>
+        <td>${date}</td>
+        <td><span class="status-pill status-${s.status}">${s.status.replace(/_/g,' ')}</span></td>
+        <td class="table-actions"><button class="link-btn" onclick="viewIpoSubscription('${s.id}')">View</button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  window.viewIpoSubscription = async function(id){
+    document.getElementById('ipo-list-view').hidden = true;
+    const detailView = document.getElementById('ipo-detail-view');
+    detailView.hidden = false;
+    detailView.innerHTML = '<p style="color:rgba(22,36,26,0.5);">Loading…</p>';
+
+    const [{ data: sub, error: subErr }, { data: docs }, { data: history }] = await Promise.all([
+      sb.from('ipo_subscriptions').select('*').eq('id', id).single(),
+      sb.from('ipo_subscription_documents').select('*').eq('subscription_id', id),
+      sb.from('ipo_subscription_status_history').select('*').eq('subscription_id', id).order('changed_at', { ascending: true })
+    ]);
+
+    if(subErr || !sub){
+      detailView.innerHTML = `<p style="color:#b3452f;">Could not load this subscription.</p><button class="link-btn" onclick="backToIpoList()">← Back to list</button>`;
+      return;
+    }
+
+    currentIpoSubscription = sub;
+
+    const investor = sub.investor_info || {};
+    const corporate = sub.corporate_info || {};
+    const joint = sub.joint_applicant_info || {};
+    const cscs = sub.cscs_info || {};
+    const banking = sub.banking_info || {};
+
+    let corporateHtml = '';
+    if(sub.investor_type === 'corporate' && corporate.companyName){
+      corporateHtml = `<div class="detail-section">
+        <h4>Corporate details</h4>
+        ${detailRow('Registered name', corporate.companyName)}
+        ${detailRow('RC number', corporate.rcNumber)}
+        ${detailRow('Email', corporate.email)}
+        ${detailRow('Phone', corporate.phone)}
+      </div>`;
+    }
+
+    const investorName = [investor.title, investor.surname, investor.firstName || investor.otherNames].filter(Boolean).join(' ');
+    const investorHtml = `<div class="detail-section">
+      <h4>${sub.investor_type === 'corporate' ? 'Contact person' : 'Investor'}</h4>
+      ${detailRow('Name', investorName)}
+      ${detailRow('Email', investor.email)}
+      ${detailRow('Phone', investor.phone)}
+    </div>`;
+
+    let jointHtml = '';
+    if(sub.investor_type === 'joint' && joint.surname){
+      const jointName = [joint.title, joint.surname, joint.firstName].filter(Boolean).join(' ');
+      jointHtml = `<div class="detail-section">
+        <h4>Joint applicant</h4>
+        ${detailRow('Name', jointName)}
+        ${detailRow('Phone', joint.phone)}
+      </div>`;
+    }
+
+    const cscsHtml = `<div class="detail-section">
+      <h4>CSCS &amp; stockbroker</h4>
+      ${detailRow('CHN', cscs.chn)}
+      ${detailRow('Stockbroker', cscs.stockbrokerName)}
+      ${detailRow('Member code', cscs.memberCode)}
+    </div>`;
+
+    const bankingHtml = `<div class="detail-section">
+      <h4>Banking</h4>
+      ${detailRow('Bank', banking.bankName === 'Other' ? banking.bankNameOther : banking.bankName)}
+      ${detailRow('Account number', banking.accountNumber)}
+      ${detailRow('BVN', banking.bvn)}
+    </div>`;
+
+    const docsHtml = `<div class="detail-section">
+      <h4>Documents (${(docs || []).length})</h4>
+      <div class="doc-list">
+        ${(docs && docs.length) ? docs.map(d => `
+          <div class="doc-item">
+            <div>
+              <div class="doc-name">${escapeHtml(d.document_type)}</div>
+              <div class="doc-meta">${escapeHtml(d.file_name)}</div>
+            </div>
+            <button class="link-btn" onclick="viewIpoDocument('${d.storage_path}')">View</button>
+          </div>`).join('') : '<p style="font-size:13px; color:rgba(22,36,26,0.5);">No documents uploaded.</p>'}
+      </div>
+    </div>`;
+
+    const historyHtml = `<div class="detail-section">
+      <h4>Status history</h4>
+      <ul class="history-list">
+        ${(history || []).map(h => `<li>${escapeHtml(h.status.replace(/_/g,' '))} — ${escapeHtml(h.changed_by)} — ${new Date(h.changed_at).toLocaleString()}${h.note ? ' — ' + escapeHtml(h.note) : ''}</li>`).join('')}
+      </ul>
+    </div>`;
+
+    const actions = renderIpoActionButtons(sub);
+
+    detailView.innerHTML = `
+      <a class="link-btn back-link" onclick="backToIpoList()">← Back to list</a>
+      <div class="detail-panel">
+        <div class="detail-overview">
+          <div>
+            <h3>${escapeHtml(sub.applicant_name || 'Untitled subscription')}</h3>
+            <div class="ref">${escapeHtml(sub.subscription_reference)} · <span class="status-pill status-${sub.status}">${sub.status.replace(/_/g,' ')}</span></div>
+          </div>
+          <div class="detail-actions">${actions}</div>
+        </div>
+        ${detailRow('Investor type', capitalize(sub.investor_type))}
+        ${detailRow('Email', sub.applicant_email)}
+        ${detailRow('Phone', sub.applicant_phone)}
+        ${detailRow('Units', sub.number_of_units ? Number(sub.number_of_units).toLocaleString() : null)}
+        ${detailRow('Amount payable', formatNaira(sub.amount_payable))}
+        ${detailRow('Submitted', new Date(sub.submitted_at).toLocaleString())}
+        ${sub.units_allotted ? detailRow('Units allotted', Number(sub.units_allotted).toLocaleString()) : ''}
+        ${sub.admin_note ? detailRow('Admin note', sub.admin_note) : ''}
+        <div style="margin-top:22px;">
+          ${corporateHtml}
+          ${investorHtml}
+          ${jointHtml}
+          ${cscsHtml}
+          ${bankingHtml}
+          ${docsHtml}
+          ${historyHtml}
+        </div>
+      </div>
+    `;
+  };
+
+  function renderIpoActionButtons(sub){
+    let buttons = '';
+    if(sub.status === 'payment_pending' || sub.status === 'payment_unconfirmed'){
+      buttons += `<button class="btn btn-primary" onclick="confirmIpoPayment('${sub.id}')">Confirm payment</button>`;
+      buttons += `<button class="btn btn-ghost" style="color:#b3452f; border-color:#b3452f;" onclick="openIpoUnconfirmedModal('${sub.id}')">Mark payment unconfirmed</button>`;
+    }
+    if(sub.status === 'payment_confirmed'){
+      buttons += `<button class="btn btn-primary" onclick="moveIpoToPendingExecution('${sub.id}')">Move to pending execution</button>`;
+    }
+    if(sub.status === 'pending_execution'){
+      buttons += `<button class="btn btn-primary" onclick="markIpoExecuted('${sub.id}')">Mark executed</button>`;
+    }
+    if(sub.status === 'executed'){
+      buttons += `<button class="btn btn-primary" onclick="openIpoAllottedModal('${sub.id}')">Mark allotted</button>`;
+    }
+    return buttons;
+  }
+
+  window.backToIpoList = function(){
+    document.getElementById('ipo-detail-view').hidden = true;
+    document.getElementById('ipo-list-view').hidden = false;
+    loadIpoSubscriptions();
+  };
+
+  window.viewIpoDocument = async function(storagePath){
+    const { data, error } = await sb.storage.from('ipo-documents').createSignedUrl(storagePath, 600);
+    if(error || !data){
+      alert('Could not open this document: ' + (error ? error.message : 'unknown error'));
+      return;
+    }
+    window.open(data.signedUrl, '_blank', 'noopener');
+  };
+
+  async function callIpoStatusUpdate(payload){
+    const token = await getAuthToken();
+    const res = await fetch('/api/update-ipo-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(payload)
+    });
+    const result = await res.json();
+    if(!res.ok) throw new Error(result.error || 'Something went wrong.');
+    return result;
+  }
+
+  window.confirmIpoPayment = async function(id){
+    try{
+      await callIpoStatusUpdate({ subscriptionId: id, newStatus: 'payment_confirmed' });
+      await viewIpoSubscription(id);
+    } catch(err){
+      alert(err.message);
+    }
+  };
+
+  window.moveIpoToPendingExecution = async function(id){
+    try{
+      await callIpoStatusUpdate({ subscriptionId: id, newStatus: 'pending_execution' });
+      await viewIpoSubscription(id);
+    } catch(err){
+      alert(err.message);
+    }
+  };
+
+  window.markIpoExecuted = async function(id){
+    try{
+      await callIpoStatusUpdate({ subscriptionId: id, newStatus: 'executed' });
+      await viewIpoSubscription(id);
+    } catch(err){
+      alert(err.message);
+    }
+  };
+
+  window.openIpoUnconfirmedModal = function(id){
+    currentIpoSubscription = { id };
+    document.getElementById('ipo-unconfirmed-note').value = '';
+    document.getElementById('ipo-unconfirmed-modal-status').textContent = '';
+    document.getElementById('ipoUnconfirmedModalOverlay').classList.add('open');
+  };
+  window.closeIpoUnconfirmedModal = function(){
+    document.getElementById('ipoUnconfirmedModalOverlay').classList.remove('open');
+  };
+  window.confirmIpoUnconfirmed = async function(){
+    const note = document.getElementById('ipo-unconfirmed-note').value.trim();
+    const statusEl = document.getElementById('ipo-unconfirmed-modal-status');
+    if(note.length < 5){
+      statusEl.textContent = 'Please provide a short note of at least 5 characters.';
+      statusEl.className = 'form-status error';
+      return;
+    }
+    try{
+      await callIpoStatusUpdate({ subscriptionId: currentIpoSubscription.id, newStatus: 'payment_unconfirmed', note });
+      closeIpoUnconfirmedModal();
+      await viewIpoSubscription(currentIpoSubscription.id);
+    } catch(err){
+      statusEl.textContent = err.message;
+      statusEl.className = 'form-status error';
+    }
+  };
+
+  window.openIpoAllottedModal = function(id){
+    currentIpoSubscription = { id };
+    document.getElementById('ipo-allotted-units').value = '';
+    document.getElementById('ipo-allotted-note').value = '';
+    document.getElementById('ipo-allotted-modal-status').textContent = '';
+    document.getElementById('ipoAllottedModalOverlay').classList.add('open');
+  };
+  window.closeIpoAllottedModal = function(){
+    document.getElementById('ipoAllottedModalOverlay').classList.remove('open');
+  };
+  window.confirmIpoAllotted = async function(){
+    const unitsAllotted = Number(document.getElementById('ipo-allotted-units').value);
+    const note = document.getElementById('ipo-allotted-note').value.trim();
+    const statusEl = document.getElementById('ipo-allotted-modal-status');
+    if(!unitsAllotted || unitsAllotted < 1){
+      statusEl.textContent = 'Enter a valid number of units allotted.';
+      statusEl.className = 'form-status error';
+      return;
+    }
+    try{
+      await callIpoStatusUpdate({ subscriptionId: currentIpoSubscription.id, newStatus: 'allotted', unitsAllotted, note: note || undefined });
+      closeIpoAllottedModal();
+      await viewIpoSubscription(currentIpoSubscription.id);
     } catch(err){
       statusEl.textContent = err.message;
       statusEl.className = 'form-status error';
