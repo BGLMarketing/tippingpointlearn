@@ -3,7 +3,7 @@ const {
   sendApplicantUnderReviewEmail,
   sendApplicantOpenedEmail,
   sendApplicantRejectedEmail
-} = require('./utils/email');
+} = require('./utils/brevo');
 
 const VALID_TRANSITIONS = ['under_review', 'opened', 'rejected'];
 
