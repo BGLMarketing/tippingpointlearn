@@ -55,6 +55,14 @@ on the `articles` table, not just by the frontend hiding them.
   long as it's in the published root.
 - **Adding an admin user**: create them directly in the Supabase dashboard
   under Authentication → Users — there's no self-serve signup on `/admin`.
+  Every Supabase Auth user on this project gets full admin access to
+  both tabs (articles and account applications) — there's no separate
+  role distinction, so only add people who should genuinely have that.
+- **Password reset**: `/admin` has a "Forgot your password?" link, using
+  Supabase Auth's built-in recovery flow (`resetPasswordForEmail` /
+  `updateUser`) — no separate page or custom token handling needed. An
+  admin who thinks their password is compromised can reset it
+  themselves without anyone touching the Supabase dashboard.
 - **Database schema**: see the `articles` table definition and RLS policies
   used to set this up (title, slug, excerpt, content, status, timestamps).
   If the project is ever rebuilt, re-run that same SQL against a fresh

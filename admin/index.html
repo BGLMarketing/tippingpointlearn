@@ -693,6 +693,42 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <button type="submit" class="btn btn-primary" style="width:100%; padding:13px;">Sign in</button>
         <div class="form-status" id="login-status"></div>
       </form>
+      <button class="link-btn" type="button" style="margin-top:14px;" id="forgot-password-btn">Forgot your password?</button>
+    </div>
+  </div>
+
+  <div id="forgot-view" hidden>
+    <div class="login-card">
+      <h2>Reset your password</h2>
+      <p class="sub">Enter your email and we'll send you a link to set a new password.</p>
+      <form id="forgot-form">
+        <div class="field">
+          <label for="forgot-email">Email</label>
+          <input type="email" id="forgot-email" required autocomplete="username">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%; padding:13px;">Send reset link</button>
+        <div class="form-status" id="forgot-status"></div>
+      </form>
+      <button class="link-btn" type="button" style="margin-top:14px;" id="back-to-login-btn">Back to sign in</button>
+    </div>
+  </div>
+
+  <div id="reset-password-view" hidden>
+    <div class="login-card">
+      <h2>Set a new password</h2>
+      <p class="sub">Choose a new password for your admin account.</p>
+      <form id="reset-password-form">
+        <div class="field">
+          <label for="new-password">New password</label>
+          <input type="password" id="new-password" required autocomplete="new-password" minlength="8">
+        </div>
+        <div class="field">
+          <label for="confirm-password">Confirm new password</label>
+          <input type="password" id="confirm-password" required autocomplete="new-password" minlength="8">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%; padding:13px;">Set new password</button>
+        <div class="form-status" id="reset-password-status"></div>
+      </form>
     </div>
   </div>
 
@@ -946,6 +982,77 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     }
   });
 
+  /* ============================================================
+     PASSWORD RESET
+     ============================================================ */
+  const forgotView = document.getElementById('forgot-view');
+  const resetPasswordView = document.getElementById('reset-password-view');
+
+  document.getElementById('forgot-password-btn').addEventListener('click', () => {
+    loginView.hidden = true;
+    forgotView.hidden = false;
+  });
+
+  document.getElementById('back-to-login-btn').addEventListener('click', () => {
+    forgotView.hidden = true;
+    loginView.hidden = false;
+  });
+
+  document.getElementById('forgot-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const statusEl = document.getElementById('forgot-status');
+    statusEl.textContent = '';
+    statusEl.className = 'form-status';
+    const email = document.getElementById('forgot-email').value.trim();
+
+    const { error } = await sb.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + window.location.pathname
+    });
+
+    if(error){
+      statusEl.textContent = error.message;
+      statusEl.className = 'form-status error';
+      return;
+    }
+    statusEl.textContent = "If that email is registered, we've sent a reset link — check your inbox.";
+    statusEl.className = 'form-status success';
+  });
+
+  document.getElementById('reset-password-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const statusEl = document.getElementById('reset-password-status');
+    statusEl.textContent = '';
+    statusEl.className = 'form-status';
+
+    const pw = document.getElementById('new-password').value;
+    const confirmPw = document.getElementById('confirm-password').value;
+
+    if(pw !== confirmPw){
+      statusEl.textContent = 'Passwords do not match.';
+      statusEl.className = 'form-status error';
+      return;
+    }
+    if(pw.length < 8){
+      statusEl.textContent = 'Password must be at least 8 characters.';
+      statusEl.className = 'form-status error';
+      return;
+    }
+
+    const { error } = await sb.auth.updateUser({ password: pw });
+    if(error){
+      statusEl.textContent = error.message;
+      statusEl.className = 'form-status error';
+      return;
+    }
+
+    statusEl.textContent = 'Password updated. Signing you in…';
+    statusEl.className = 'form-status success';
+    setTimeout(() => {
+      resetPasswordView.hidden = true;
+      checkAuth();
+    }, 900);
+  });
+
   document.getElementById('logout-btn').addEventListener('click', async () => {
     await sb.auth.signOut();
   });
@@ -1062,6 +1169,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     const { data: { session } } = await sb.auth.getSession();
     if(session){
       loginView.hidden = true;
+      forgotView.hidden = true;
       dashboardView.hidden = false;
       userEmailEl.textContent = session.user.email;
       await loadArticles();
@@ -1071,7 +1179,20 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     }
   }
 
-  sb.auth.onAuthStateChange((_event, _session) => { checkAuth(); });
+  sb.auth.onAuthStateChange((event, _session) => {
+    // A password-recovery link lands here with a valid session already
+    // attached — intercept it before checkAuth() would otherwise treat
+    // that as "signed in" and show the dashboard directly, and force
+    // setting a new password first instead.
+    if(event === 'PASSWORD_RECOVERY'){
+      loginView.hidden = true;
+      forgotView.hidden = true;
+      dashboardView.hidden = true;
+      resetPasswordView.hidden = false;
+      return;
+    }
+    checkAuth();
+  });
   checkAuth();
 
   /* ============================================================
