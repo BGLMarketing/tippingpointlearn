@@ -9,6 +9,7 @@ Static site for Tipping Point (BGL Securities' digital investment platform), cur
 /faq              → general FAQ
 /waitlist         → standalone waitlist form (shareable link, e.g. for ads/social bio)
 /dangote-ipo      → Dangote Refinery IPO campaign page (FAQ, 3-channel steps, waitlist)
+/dangote-ipo/subscribe → IPO subscription wizard — see "Dangote IPO subscription" below
 /learn            → Learn hub (placeholder — see "Learn page" below)
 /open-account     → BGL account opening wizard (Individual/Joint/Corporate) — see
                     "Account opening" below
@@ -58,8 +59,9 @@ on the `articles` table, not just by the frontend hiding them.
 - **Adding an admin user**: create them directly in the Supabase dashboard
   under Authentication → Users — there's no self-serve signup on `/admin`.
   Every Supabase Auth user on this project gets full admin access to
-  both tabs (articles and account applications) — there's no separate
-  role distinction, so only add people who should genuinely have that.
+  every tab (articles, account applications, referral codes, and the
+  Dangote IPO) — there's no separate role distinction, so only add
+  people who should genuinely have that.
 - **Password reset**: `/admin` has a "Forgot your password?" link, using
   Supabase Auth's built-in recovery flow (`resetPasswordForEmail` /
   `updateUser`) — no separate page or custom token handling needed. An
@@ -243,6 +245,82 @@ other page, so it's a normal Netlify-served page like `/faq` or
   "Referred by" field automatically (reading the `ref` query param on
   load), taking priority even over a resumed in-progress session,
   since clicking a shared link is a clear, explicit signal.
+
+## Dangote IPO subscription
+
+`/dangote-ipo` is the public campaign page (offer terms, FAQ, waitlist).
+Once the offer is open, it links to `/dangote-ipo/subscribe`, a
+multi-step wizard for actually subscribing to units — Individual,
+Corporate, or Joint — built from BGL's official Investor Application
+Form for the offer. It reuses the exact same mechanics as
+`/open-account`: shared brand CSS/nav/footer, session persistence to
+`sessionStorage` across accidental mobile reloads, documents uploaded
+directly to Supabase Storage via signed URLs, and required-field/
+required-document validation that only enforces currently-visible
+fields.
+
+- **Offer terms**: currently ₦525 per unit, 50,000-unit minimum, then
+  multiples of 10 above that — enforced both client-side (live Naira
+  calculation as units are entered) and server-side in
+  `submit-ipo-subscription.js`. If the terms change for a future offer,
+  update both the wizard's participation step and that server-side
+  check together, plus the hero/FAQ copy on `/dangote-ipo` itself.
+- **Fields collected**: investor type; participation (units + computed
+  amount payable); investor or corporate identity details; joint
+  applicant details (joint only); CSCS/stockbroker info (CHN,
+  stockbroker name, member code); Naira banking details (bank,
+  account number, BVN); and three required documents — signature,
+  valid ID, payment evidence.
+- **Document uploads**: same signed-URL pattern as account opening,
+  but into a separate private bucket, `ipo-documents`, via
+  `ipo-create-upload-url.js` — kept separate from
+  `application-documents` since these are a different document set
+  tied to a different table.
+- **Submission**: `submit-ipo-subscription.js` validates the unit-count
+  rule again server-side (never trust the client-computed amount),
+  writes the subscription to `ipo_subscriptions` starting at status
+  `payment_pending` (schema in `supabase/ipo_subscriptions.sql`), logs
+  the initial row to `ipo_subscription_status_history`, and sends a
+  Brevo confirmation email to the applicant plus an internal alert —
+  same non-fatal-email-failure pattern as account opening, so a flaky
+  send never blocks a real submission.
+  - **Supabase setup**: run `supabase/ipo_subscriptions.sql` once
+    against the same Supabase project as the rest of the site (adds
+    `ipo_subscriptions`, `ipo_subscription_documents`,
+    `ipo_subscription_status_history`, `ipo_notify_signups`, and their
+    RLS policies), and create a private Storage bucket named
+    `ipo-documents`.
+- **Status pipeline**: `payment_pending` → `payment_confirmed` or
+  `payment_unconfirmed` (applicant emailed either way) →
+  `pending_execution` → `executed` → `allotted`. Enforced in
+  `update-ipo-status.js`, admin-only (same Supabase Auth bearer-token
+  check as `update-application-status.js`). Marking
+  **payment_unconfirmed** requires a note of at least 5 characters
+  (emailed to the applicant so they know what to fix); marking
+  **allotted** requires a final units-allotted number. `pending_execution`
+  intentionally sends no email — a quiet intermediate step between
+  payment confirmation and execution.
+- **Admin review**: `/admin` has a "Dangote IPO" tab — a list of
+  subscriptions (filterable by status, searchable by name/email/
+  reference, showing units and amount payable), a detail view
+  (investor/corporate/joint-applicant info, CSCS & banking details,
+  uploaded documents via short-lived signed URLs, and full status
+  history), and the status-change actions described above. Same
+  pattern as the "Account applications" tab: the admin page never
+  writes `ipo_subscriptions` directly, only `update-ipo-status.js`
+  does, using the service role key.
+  - **No resend-notification action yet** for IPO subscriptions —
+    unlike account applications, there's no
+    `resend-ipo-notification.js` endpoint. If that's needed later,
+    build it the same way `resend-notification.js` works: re-send
+    whatever email matches the subscription's *current* stored status,
+    not new input.
+- **Notify-me opt-in**: both `/dangote-ipo` and `/dangote-ipo/subscribe`
+  have a "Get email updates on the offer" link opening a lightweight
+  modal (name + email + optional phone) for visitors not ready to
+  subscribe yet. Backed by the public `ipo-notify-signup.js`, writing
+  to `ipo_notify_signups` — a separate table from the site's general
+  waitlist, since these are specifically people who want IPO updates.
 
 ## Deploying
 
