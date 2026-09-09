@@ -724,7 +724,7 @@ const MIN_UNITS = 50000;
 // Same offer-opening moment as /dangote-ipo — see that page's script
 // for the reasoning. Keep these two constants in sync if the date
 // ever changes.
-const IPO_OFFER_OPENS_AT = new Date('2026-09-14T00:00:00+01:00');
+const IPO_OFFER_OPENS_AT = new Date('2026-01-01T00:00:00+01:00'); // TEMP-TESTING: real date is 2026-09-14 — revert before merging to main
 function isIpoOfferOpen(){ return new Date() >= IPO_OFFER_OPENS_AT; }
 function gateOfferNotOpen(){
   const entry = document.getElementById('aowEntry');

@@ -13,7 +13,7 @@ const { sendIpoSubmissionReceivedEmail, sendIpoInternalAlert } = require('./util
 // check is what actually stops a subscription being recorded before
 // the offer is real. Keep in sync with the two frontend copies of
 // this constant if the date ever changes.
-const IPO_OFFER_OPENS_AT = new Date('2026-09-14T00:00:00+01:00');
+const IPO_OFFER_OPENS_AT = new Date('2026-01-01T00:00:00+01:00'); // TEMP-TESTING: real date is 2026-09-14 — revert before merging to main
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {

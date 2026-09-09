@@ -1575,7 +1575,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   // self-updating on the day itself with no redeploy needed. If the
   // official opening date ever changes, update this constant (and the
   // hero/FAQ copy that states the date in prose).
-  const IPO_OFFER_OPENS_AT = new Date('2026-09-14T00:00:00+01:00');
+  const IPO_OFFER_OPENS_AT = new Date('2026-01-01T00:00:00+01:00'); // TEMP-TESTING: real date is 2026-09-14 — revert before merging to main
 
   function updateIpoOfferState(){
     const isOpen = new Date() >= IPO_OFFER_OPENS_AT;
