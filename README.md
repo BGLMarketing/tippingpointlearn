@@ -15,8 +15,8 @@ Static site for Tipping Point (BGL Securities' digital investment platform), cur
                     "Account opening" below
 /track-application → Public status lookup for a submitted application
                     (reference + email) — see "Account opening" below
-/referral-status  → Public lookup for a referral code (agent view of
-                    accounts opened + IPO subscribers) — see
+/referral-status  → OTP-gated lookup for a referral code (agent view
+                    of accounts opened + IPO subscribers) — see
                     "Referral codes" below
 ```
 
@@ -217,49 +217,64 @@ Dangote IPO subscription wizard — a single code tracks an agent's BGL
 account referrals and their IPO subscription referrals together.
 
 - **Admin-issued codes**: admin creates a code per agent/relationship
-  manager from the "Referral codes" tab in `/admin` (agent name +
-  either a custom code or an auto-generated one, e.g. `RM-4X7QK2`).
-  Applicants enter that code in the account-opening wizard's existing
-  "Referred by / Relationship Manager" field, or the IPO wizard's
-  "Referred by" field on the Participation step — no change to either
-  field itself, both are still free text, so a typo or a code that
-  was never actually issued just won't match anything. Matching is
-  case-insensitive: codes are always stored uppercase, and lookups
-  match the applicant's typed value case-insensitively too. Admin
-  manages the `referral_codes` table directly from the browser (same
-  as the Learn articles table) rather than through a function, since
-  creating/deleting a code has no side effects like emails to
-  trigger. Run `supabase/referral_codes.sql` once to set up the
-  table, then `supabase/migration_ipo_referral.sql` to add the
-  matching `referred_by` column to `ipo_subscriptions`.
+  manager from the "Referral codes" tab in `/admin` (agent name,
+  email, and either a custom code or an auto-generated one, e.g.
+  `RM-4X7QK2`). Applicants enter that code in the account-opening
+  wizard's existing "Referred by / Relationship Manager" field, or the
+  IPO wizard's "Referred by" field on the Participation step — no
+  change to either field itself, both are still free text, so a typo
+  or a code that was never actually issued just won't match anything.
+  Matching is case-insensitive: codes are always stored uppercase, and
+  lookups match the applicant's typed value case-insensitively too.
+  Admin manages the `referral_codes` table directly from the browser
+  (same as the Learn articles table) rather than through a function,
+  since creating/deleting a code has no side effects like emails to
+  trigger. Each code's "Copy links" button in the table copies a
+  ready-to-paste block (the code plus both pre-filled links, account-
+  opening and IPO subscribe) to the clipboard in one click. Run
+  `supabase/referral_codes.sql` once to set up the table, then
+  `supabase/migration_ipo_referral.sql` to add the matching
+  `referred_by` column to `ipo_subscriptions`, then
+  `supabase/migration_referral_otp.sql` for the email column and OTP
+  table described below.
 - **Self-service referral codes**: `/open-account`'s entry screen has
   two links — "Check your referrals" (straight to `/referral-status`)
   and "Refer someone to BGL", which opens a modal where anyone (not
-  just admin-designated agents) can enter their name and a preferred
-  code to get their own code and a shareable link
-  (`/open-account?ref=<code>`). Backed by the public
-  `create-referral-code.js` — validates the code is 3-20 characters of
-  letters/numbers/hyphens, rejects a code that's already taken (case-
-  insensitively) rather than silently generating a different one,
-  since the applicant explicitly chose that code. Self-service codes
-  land in the same `referral_codes` table as admin-created ones
-  (distinguished only by `created_by = 'self-service'`) and work
-  identically everywhere. Visiting `/open-account?ref=<code>` or
-  `/dangote-ipo/subscribe?ref=<code>` pre-fills the referral field
-  automatically (reading the `ref` query param on load), taking
-  priority even over a resumed in-progress session, since clicking a
-  shared link is a clear, explicit signal.
-- **Public stats — `/referral-status`**: an agent checks their code
-  (no login) to see two counts — **BGL accounts opened** (only
-  applications that reached `opened` status, not every application
-  referred) and **Dangote IPO subscribers** (every IPO subscription
-  referred, at any status) — plus the underlying lists of each.
-  Backed by `referral-lookup.js`, same pattern as
-  `track-application.js`: the code itself (admin-issued or
-  self-service, not guessable) is the access control, and only a safe
-  subset of fields is ever returned per record (reference, name,
-  type, status — never email, banking details, documents, or
-  **commission figures**, which are admin-only).
+  just admin-designated agents) can enter their name, email, and a
+  preferred code to get their own code and both shareable links
+  (`/open-account?ref=<code>` and `/dangote-ipo/subscribe?ref=<code>`).
+  Backed by the public `create-referral-code.js` — validates the code
+  is 3-20 characters of letters/numbers/hyphens, rejects a code that's
+  already taken (case-insensitively) rather than silently generating a
+  different one, since the applicant explicitly chose that code.
+  Self-service codes land in the same `referral_codes` table as
+  admin-created ones (distinguished only by `created_by =
+  'self-service'`) and work identically everywhere. Visiting
+  `/open-account?ref=<code>` or `/dangote-ipo/subscribe?ref=<code>`
+  pre-fills the referral field automatically (reading the `ref` query
+  param on load), taking priority even over a resumed in-progress
+  session, since clicking a shared link is a clear, explicit signal.
+- **Public stats — `/referral-status`, OTP-gated**: knowing the code
+  alone is no longer enough — an agent requests a 6-digit verification
+  code (`request-referral-otp.js`), which is emailed to whatever
+  address is on file for that code (never a self-claimed one, which is
+  what makes the gate meaningful), then enters it to complete the
+  lookup (`referral-lookup.js`, now requiring `{code, otp}` instead of
+  just `{code}`). OTPs are sha-256 hashed before storage (never kept in
+  plain text), expire after 10 minutes, allow at most 5 incorrect
+  attempts before requiring a fresh one, and are single-use. A 60-second
+  cooldown prevents re-sending if a still-valid OTP was just requested.
+  **Codes with no email on file are blocked from lookup entirely** —
+  every code that existed before this feature shipped has no email yet
+  and needs one added from `/admin`'s "Add email" action before anyone
+  can check it. Once verified, the agent sees two counts — **BGL
+  accounts opened** (only applications that reached `opened` status,
+  not every application referred) and **Dangote IPO subscribers**
+  (every IPO subscription referred, at any status) — plus the
+  underlying lists of each. Only a safe subset of fields is ever
+  returned per record (reference, name, type, status — never email,
+  banking details, documents, or **commission figures**, which are
+  admin-only).
 - **Commission — admin only**: the "Referral codes" tab in `/admin`
   additionally shows, per code, **accounts opened**, **IPO
   subscribers**, and **commission owed** — 0.25% of the total amount
