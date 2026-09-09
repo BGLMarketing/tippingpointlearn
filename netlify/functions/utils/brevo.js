@@ -1,3 +1,5 @@
+const { getAdminEmails } = require('./supabaseClient');
+
 const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
 const BRAND = {
@@ -148,8 +150,16 @@ async function sendInternalNewSubmissionAlert({
 
   const html = wrapEmail(`New ${typeLabel} account opening request — ${applicationReference}`, body);
 
+  // Notify every admin (every Supabase Auth user) rather than a
+  // hardcoded pair of addresses that goes stale as the team changes.
+  // Falls back to the original static list only if the admin lookup
+  // itself fails, so a Supabase hiccup never means nobody hears
+  // about a new application.
+  const adminEmails = await getAdminEmails();
+  const to = adminEmails.length ? adminEmails : ['clientservices@bglafrica.com', 'marketing@bglafrica.ng'];
+
   return sendEmail({
-    to: ['clientservices@bglafrica.com', 'marketing@bglafrica.ng'],
+    to,
     subject: `New Account Opening Request — ${typeLabel} — ${applicationReference}`,
     html
   });
