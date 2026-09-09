@@ -1,4 +1,5 @@
 const { wrapEmail, button, sendEmail } = require('./brevo');
+const { getAdminEmails } = require('./supabaseClient');
 
 const SITE_URL = process.env.SITE_URL || 'https://tippingpoint.bglafrica.com';
 const GREEN = '#005E00';
@@ -103,8 +104,16 @@ async function sendIpoInternalAlert({ subscriptionReference, investorType, appli
     ${button('View in admin', adminUrl)}
   `;
   const html = wrapEmail(`New Dangote IPO subscription — ${subscriptionReference}`, body);
+
+  // Same "notify every admin" approach as the account-opening alert
+  // in brevo.js — every Supabase Auth user is an admin, so this
+  // reaches the whole team without a hand-maintained list. Falls
+  // back to the original static pair only if the admin lookup fails.
+  const adminEmails = await getAdminEmails();
+  const to = adminEmails.length ? adminEmails : ['clientservices@bglafrica.com', 'dangotehelpdesk@bglafrica.com'];
+
   return sendEmail({
-    to: ['clientservices@bglafrica.com', 'dangotehelpdesk@bglafrica.com'],
+    to,
     subject: `New Dangote IPO Subscription — ${typeLabel} — ${subscriptionReference}`,
     html
   });
