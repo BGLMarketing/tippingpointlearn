@@ -938,7 +938,7 @@ function emailField(prefix,key,label,required){
 function telField(prefix,key,label,required){
   return `<div class="field">
     <label>${label}${required?'<span class="req">*</span>':''}</label>
-    <input type="tel" data-field="${prefix}.${key}" ${required?'data-required="true"':''}>
+    <input type="tel" data-field="${prefix}.${key}" ${required?'data-required="true"':''} oninput="this.value=this.value.replace(/[A-Za-z]/g,'')">
     <div class="err-msg">Enter a valid phone number.</div>
   </div>`;
 }
