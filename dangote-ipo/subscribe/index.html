@@ -651,6 +651,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
      no storage write access on its own — only the signed token does. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="/assets/js/supabase-config.js"></script>
+<script src="/assets/js/nigeria-states-lgas.js"></script>
 
 <script>
   // ---------- Waitlist modal ----------
@@ -844,6 +845,53 @@ function selectField(prefix,key,label,options,required){
     </select>
     <div class="err-msg">Please make a selection.</div>
   </div>`;
+}
+/* ---------- state / LGA cascading dropdowns ---------- */
+// State of origin picks from NIGERIA_STATES_LGAS's keys; LGA of
+// origin starts empty/disabled and is populated from that state's
+// LGA list once a state is chosen. Shared dataset lives in
+// /assets/js/nigeria-states-lgas.js (also used by /open-account).
+function stateOriginField(prefix,key,label,required){
+  const options = Object.keys(NIGERIA_STATES_LGAS).sort();
+  return `<div class="field">
+    <label>${label}${required?'<span class="req">*</span>':''}</label>
+    <select data-field="${prefix}.${key}" ${required?'data-required="true"':''} onchange="onStateOriginChange('${prefix}')">
+      <option value="">Select state</option>
+      ${options.map(o=>`<option value="${o}">${o}</option>`).join('')}
+    </select>
+    <div class="err-msg">Please select a state.</div>
+  </div>`;
+}
+function lgaOriginField(prefix,key,label,required){
+  return `<div class="field">
+    <label>${label}${required?'<span class="req">*</span>':''}</label>
+    <select data-field="${prefix}.${key}" id="${prefix}-${key}-select" ${required?'data-required="true"':''} disabled>
+      <option value="">Select state first</option>
+    </select>
+    <div class="err-msg">Please select a local government area.</div>
+  </div>`;
+}
+function populateLgaOptions(lgaSelectEl, selectedState, selectedLga){
+  if(!selectedState || !NIGERIA_STATES_LGAS[selectedState]){
+    lgaSelectEl.innerHTML = '<option value="">Select state first</option>';
+    lgaSelectEl.disabled = true;
+    return;
+  }
+  const lgas = NIGERIA_STATES_LGAS[selectedState];
+  lgaSelectEl.innerHTML = '<option value="">Select LGA</option>' +
+    lgas.map(l => `<option value="${l}"${l === selectedLga ? ' selected' : ''}>${l}</option>`).join('');
+  lgaSelectEl.disabled = false;
+}
+function onStateOriginChange(prefix){
+  const stateSelect = document.querySelector(`[data-field="${prefix}.stateOrigin"]`);
+  const lgaSelect = document.getElementById(prefix + '-lgaOrigin-select');
+  if(!stateSelect || !lgaSelect) return;
+  // A new state invalidates whatever LGA was previously chosen —
+  // clear it in both the select and the stored state rather than
+  // silently keeping a mismatched state/LGA pair.
+  populateLgaOptions(lgaSelect, stateSelect.value, null);
+  if(!state[prefix]) state[prefix] = {};
+  state[prefix].lgaOrigin = '';
 }
 function digitField(prefix,key,label,digits,required){
   return `<div class="field">
@@ -1064,7 +1112,8 @@ function investorDetailsStepHtml(){
       ${textField('investor','surname','Surname',true)}
       ${textField('investor','firstName','First name',true)}
       ${textField('investor','otherNames','Other names',false)}
-      ${textField('investor','lgaOrigin','Local government area of origin',true)}
+      ${stateOriginField('investor','stateOrigin','State of origin',true)}
+      ${lgaOriginField('investor','lgaOrigin','Local government area of origin',true)}
       ${textareaField('investor','address','Full postal address',true,'full')}
       ${textField('investor','city','City/Town',true)}
       ${textField('investor','state','State',true)}
@@ -1231,6 +1280,17 @@ function renderRail(){
 function renderStep(){
   renderRail();
   document.getElementById('aowStepBody').innerHTML = steps[currentStep].render();
+  if(steps[currentStep].id === 'investor'){
+    // The LGA <select> starts empty ("Select state first") every
+    // render — populate it from whatever state is already stored
+    // (resumed session, or navigating back) before hydrateFields()
+    // tries to set its value, since a value can't "stick" on a
+    // <select> that doesn't have that option yet.
+    const lgaSelect = document.getElementById('investor-lgaOrigin-select');
+    if(lgaSelect && state.investor){
+      populateLgaOptions(lgaSelect, state.investor.stateOrigin, state.investor.lgaOrigin);
+    }
+  }
   hydrateFields();
   document.getElementById('aowBackBtn').style.visibility = currentStep === 0 ? 'hidden' : 'visible';
   document.getElementById('aowNextBtn').textContent = currentStep === steps.length - 1 ? 'Submit subscription' : 'Continue';

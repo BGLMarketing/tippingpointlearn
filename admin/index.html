@@ -1821,6 +1821,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       ${detailRow('Name', investorName)}
       ${detailRow('Email', investor.email)}
       ${detailRow('Phone', investor.phone)}
+      ${sub.investor_type !== 'corporate' ? detailRow('State / LGA of origin', [investor.stateOrigin, investor.lgaOrigin].filter(Boolean).join(' / ')) : ''}
     </div>`;
 
     let jointHtml = '';
