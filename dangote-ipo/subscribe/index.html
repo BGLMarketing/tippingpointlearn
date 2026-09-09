@@ -652,6 +652,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="/assets/js/supabase-config.js"></script>
 <script src="/assets/js/nigeria-states-lgas.js"></script>
+<script src="/assets/js/countries.js"></script>
 
 <script>
   // ---------- Waitlist modal ----------
@@ -893,6 +894,19 @@ function onStateOriginChange(prefix){
   if(!state[prefix]) state[prefix] = {};
   state[prefix].lgaOrigin = '';
 }
+function countryField(prefix,key,label,required){
+  // Nigeria first and pre-selected — the overwhelming majority of
+  // applicants here, so this saves a scroll for almost everyone
+  // while remaining fully changeable. List lives in
+  // /assets/js/countries.js.
+  return `<div class="field">
+    <label>${label}${required?'<span class="req">*</span>':''}</label>
+    <select data-field="${prefix}.${key}" ${required?'data-required="true"':''}>
+      ${COUNTRIES.map(c=>`<option value="${c}"${c === 'Nigeria' ? ' selected' : ''}>${c}</option>`).join('')}
+    </select>
+    <div class="err-msg">Please select a country.</div>
+  </div>`;
+}
 function digitField(prefix,key,label,digits,required){
   return `<div class="field">
     <label>${label}${required?'<span class="req">*</span>':''}</label>
@@ -1094,7 +1108,7 @@ function investorDetailsStepHtml(){
         ${textareaField('corporate','address','Full postal address',true,'full')}
         ${textField('corporate','city','City/Town',true)}
         ${textField('corporate','state','State',true)}
-        ${textField('corporate','country','Country',true)}
+        ${countryField('corporate','country','Country',true)}
         ${telField('corporate','phone','Phone number',true)}
         ${textField('corporate','tin','Tax Identification Number',true)}
         ${emailField('corporate','email','Email address',true)}
@@ -1117,7 +1131,7 @@ function investorDetailsStepHtml(){
       ${textareaField('investor','address','Full postal address',true,'full')}
       ${textField('investor','city','City/Town',true)}
       ${textField('investor','state','State',true)}
-      ${textField('investor','country','Country',true)}
+      ${countryField('investor','country','Country',true)}
       ${telField('investor','phone','Phone number',true)}
       ${textField('investor','tin','Tax Identification Number',false)}
       ${dateField('investor','dob','Date of birth',true)}
