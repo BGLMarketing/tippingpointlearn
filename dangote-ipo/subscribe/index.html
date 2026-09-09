@@ -910,7 +910,7 @@ function countryField(prefix,key,label,required){
 function digitField(prefix,key,label,digits,required){
   return `<div class="field">
     <label>${label}${required?'<span class="req">*</span>':''}</label>
-    <input type="text" inputmode="numeric" maxlength="${digits}" data-field="${prefix}.${key}" data-digits="${digits}" ${required?'data-required="true"':''}>
+    <input type="text" inputmode="numeric" maxlength="${digits}" data-field="${prefix}.${key}" data-digits="${digits}" ${required?'data-required="true"':''} oninput="this.value=this.value.replace(/\\D/g,'')">
     <div class="err-msg">Enter exactly ${digits} digits.</div>
   </div>`;
 }
