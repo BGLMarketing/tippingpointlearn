@@ -1577,8 +1577,18 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   // hero/FAQ copy that states the date in prose).
   const IPO_OFFER_OPENS_AT = new Date('2026-09-14T00:00:00+01:00');
 
+  // SUBSCRIBE_ROUTE_LIVE: hard override, independent of the date
+  // above. /dangote-ipo/subscribe is currently a placeholder — the
+  // built wizard was intentionally taken off the live path, expected
+  // to be replaced by a separate white-labelled solution — so the
+  // "Subscribe to the IPO" button must stay hidden regardless of
+  // what today's date is, even once IPO_OFFER_OPENS_AT passes. Set
+  // this back to true (and it'll resume following the date normally)
+  // once /dangote-ipo/subscribe is a real destination again.
+  const SUBSCRIBE_ROUTE_LIVE = false;
+
   function updateIpoOfferState(){
-    const isOpen = new Date() >= IPO_OFFER_OPENS_AT;
+    const isOpen = SUBSCRIBE_ROUTE_LIVE && new Date() >= IPO_OFFER_OPENS_AT;
     document.querySelectorAll('[data-ipo-subscribe-btn]').forEach(el => { el.hidden = !isOpen; });
     document.querySelectorAll('[data-ipo-notify-btn]').forEach(el => { el.hidden = isOpen; });
   }

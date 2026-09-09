@@ -15,9 +15,24 @@ const { sendIpoSubmissionReceivedEmail, sendIpoInternalAlert } = require('./util
 // this constant if the date ever changes.
 const IPO_OFFER_OPENS_AT = new Date('2026-09-14T00:00:00+01:00');
 
+// SUBSCRIPTIONS_ENABLED: hard kill switch, independent of the date
+// above. /dangote-ipo/subscribe is currently a placeholder — the
+// built wizard was intentionally taken off the live path, expected
+// to be replaced by a separate white-labelled solution — so this
+// endpoint refuses every submission outright regardless of what
+// today's date is, even once IPO_OFFER_OPENS_AT passes. This is the
+// real safety net (the frontend placeholder is only a UI
+// convenience) — set this back to true once subscriptions should
+// actually be accepted again.
+const SUBSCRIPTIONS_ENABLED = false;
+
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return jsonResponse(405, { error: 'Method not allowed' });
+  }
+
+  if (!SUBSCRIPTIONS_ENABLED) {
+    return jsonResponse(403, { error: 'Dangote IPO subscriptions are not currently being accepted.' });
   }
 
   if (new Date() < IPO_OFFER_OPENS_AT) {
