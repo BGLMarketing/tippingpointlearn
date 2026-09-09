@@ -780,6 +780,49 @@ function clearPersistedState(){
   try{ sessionStorage.removeItem(PERSIST_KEY); } catch(e){}
 }
 
+// These four are declared here — before tryResume() — rather than
+// near the functions that use them, because tryResume() runs
+// immediately and can call straight into renderStep() when resuming
+// a session already in progress. A resumed session might be sitting
+// on the banking or documents step, whose render/handler functions
+// reference these. const/let are only usable after their own
+// declaration line actually executes ("temporal dead zone") — having
+// them declared further down, after code that could already call
+// into them, throws a ReferenceError on any resumed session (this
+// exact bug was caught in testing on the Dangote IPO wizard, which
+// shares this same structure — fixed here too before it could bite a
+// real applicant).
+//
+// A comprehensive, embedded list of CBN-licensed banks and well-known
+// digital/microfinance banks operating in Nigeria. Deliberately NOT
+// fetched from a live third-party API at runtime — this is a
+// regulated KYC form, and the bank-name field must never depend on an
+// unofficial external service's uptime. "Other" is always available
+// as a fallback for anything not listed.
+const NIGERIAN_BANKS = [
+  'Access Bank','Citibank Nigeria','Coronation Merchant Bank','Ecobank Nigeria',
+  'Fidelity Bank','First Bank of Nigeria','First City Monument Bank (FCMB)',
+  'FSDH Merchant Bank','Globus Bank','Greenwich Merchant Bank',
+  'Guaranty Trust Bank (GTBank)','Heritage Bank','Jaiz Bank','Keystone Bank',
+  'Lotus Bank','Nova Merchant Bank','Optimus Bank','Parallex Bank',
+  'Polaris Bank','Premium Trust Bank','Providus Bank','Rand Merchant Bank',
+  'Signature Bank','Stanbic IBTC Bank','Standard Chartered Bank',
+  'Sterling Bank','SunTrust Bank','TAJ Bank','Titan Trust Bank',
+  'Union Bank of Nigeria','United Bank for Africa (UBA)','Unity Bank',
+  'Wema Bank','Zenith Bank',
+  'Carbon','Hope PSB','Kuda Bank','Mint Finex MFB','Moniepoint MFB',
+  'MoMo PSB (MTN)','9PSB (9mobile)','Opay','PalmPay','Rubies Microfinance Bank',
+  'Smartcash PSB (Airtel)','Sparkle Microfinance Bank','VFD Microfinance Bank'
+];
+// Files upload directly from the browser to Supabase Storage (via a
+// signed URL minted by upload-url.js), bypassing Netlify's
+// function request-size limit entirely — these caps are now purely
+// about keeping uploads fast and storage costs sane, not a hard
+// platform ceiling.
+const MAX_FILE_SIZE = 5 * 1024 * 1024;        // 5MB per file
+const MAX_TOTAL_FILE_SIZE = 25 * 1024 * 1024; // 25MB combined across all documents
+let activeUploads = 0;
+
 // Silently resume an in-progress application if one was interrupted
 // (e.g. a mobile reload during a file upload) — skip the entry screen
 // entirely and land right back where the applicant left off.
@@ -923,32 +966,10 @@ function selectField(prefix,key,label,options,required){
 function digitField(prefix,key,label,digits,required){
   return `<div class="field">
     <label>${label}${required?'<span class="req">*</span>':''}</label>
-    <input type="text" inputmode="numeric" maxlength="${digits}" data-field="${prefix}.${key}" data-digits="${digits}" ${required?'data-required="true"':''}>
+    <input type="text" inputmode="numeric" maxlength="${digits}" data-field="${prefix}.${key}" data-digits="${digits}" ${required?'data-required="true"':''} oninput="this.value=this.value.replace(/\\D/g,'')">
     <div class="err-msg">Enter exactly ${digits} digits.</div>
   </div>`;
 }
-
-// A comprehensive, embedded list of CBN-licensed banks and well-known
-// digital/microfinance banks operating in Nigeria. Deliberately NOT
-// fetched from a live third-party API at runtime — this is a
-// regulated KYC form, and the bank-name field must never depend on an
-// unofficial external service's uptime. "Other" is always available
-// as a fallback for anything not listed.
-const NIGERIAN_BANKS = [
-  'Access Bank','Citibank Nigeria','Coronation Merchant Bank','Ecobank Nigeria',
-  'Fidelity Bank','First Bank of Nigeria','First City Monument Bank (FCMB)',
-  'FSDH Merchant Bank','Globus Bank','Greenwich Merchant Bank',
-  'Guaranty Trust Bank (GTBank)','Heritage Bank','Jaiz Bank','Keystone Bank',
-  'Lotus Bank','Nova Merchant Bank','Optimus Bank','Parallex Bank',
-  'Polaris Bank','Premium Trust Bank','Providus Bank','Rand Merchant Bank',
-  'Signature Bank','Stanbic IBTC Bank','Standard Chartered Bank',
-  'Sterling Bank','SunTrust Bank','TAJ Bank','Titan Trust Bank',
-  'Union Bank of Nigeria','United Bank for Africa (UBA)','Unity Bank',
-  'Wema Bank','Zenith Bank',
-  'Carbon','Hope PSB','Kuda Bank','Mint Finex MFB','Moniepoint MFB',
-  'MoMo PSB (MTN)','9PSB (9mobile)','Opay','PalmPay','Rubies Microfinance Bank',
-  'Smartcash PSB (Airtel)','Sparkle Microfinance Bank','VFD Microfinance Bank'
-];
 
 function bankNameField(prefix){
   const id = `${prefix}_bankName`;
@@ -1089,14 +1110,6 @@ function uploadField(prefix, key, label, hint){
   </div>`;
 }
 
-// Files upload directly from the browser to Supabase Storage (via a
-// signed URL minted by upload-url.js), bypassing Netlify's
-// function request-size limit entirely — these caps are now purely
-// about keeping uploads fast and storage costs sane, not a hard
-// platform ceiling.
-const MAX_FILE_SIZE = 5 * 1024 * 1024;        // 5MB per file
-const MAX_TOTAL_FILE_SIZE = 25 * 1024 * 1024; // 25MB combined across all documents
-
 function getTotalFileSize(){
   let total = 0;
   Object.values(state.files).forEach(group => {
@@ -1108,8 +1121,6 @@ function getTotalFileSize(){
 function formatMB(bytes){
   return (bytes / (1024*1024)).toFixed(1) + 'MB';
 }
-
-let activeUploads = 0;
 
 function updateNextButtonState(){
   const nextBtn = document.getElementById('aowNextBtn');
@@ -1245,7 +1256,7 @@ function bankingStepHtml(){
     <div class="aow-grid">
       ${bankNameField('banking')}
       ${textField('banking','accountName','Account name',true)}
-      ${textField('banking','accountNumber','Account number',true)}
+      ${digitField('banking','accountNumber','Account number',10,true)}
       ${selectField('banking','sourceOfFunds','Source of funds',['Salary','Business income','Investments','Inheritance','Other'],true)}
       <div class="field">
         <label>Account type<span class="req">*</span></label>
