@@ -570,6 +570,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   .status-unpublished{ background:rgba(226,160,64,0.16); color:#8a5c1e; }
   .status-submitted{ background:var(--paper-dim); border:1px solid var(--line-dark); color:rgba(22,36,26,0.6); }
   .status-under_review{ background:rgba(226,160,64,0.16); color:#8a5c1e; }
+  .status-under_review_client_service{ background:rgba(226,160,64,0.16); color:#8a5c1e; }
+  .status-under_review_compliance{ background:rgba(226,160,64,0.28); color:#8a5c1e; font-weight:700; }
   .status-opened{ background:rgba(51,153,102,0.14); color:var(--green-deep); }
   .status-rejected{ background:rgba(179,69,47,0.12); color:#b3452f; }
   .status-payment_pending{ background:var(--paper-dim); border:1px solid var(--line-dark); color:rgba(22,36,26,0.6); }
@@ -817,7 +819,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <select id="app-status-filter" onchange="loadApplications()">
               <option value="">All statuses</option>
               <option value="submitted">Submitted</option>
-              <option value="under_review">Under review</option>
+              <option value="under_review_client_service">Under review — Client Service</option>
+              <option value="under_review_compliance">Under review — Compliance</option>
               <option value="opened">Opened</option>
               <option value="rejected">Rejected</option>
             </select>
@@ -1372,7 +1375,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <td>${escapeHtml(a.applicant_name || '—')}</td>
         <td style="text-transform:capitalize;">${escapeHtml(a.account_type)}</td>
         <td>${date}</td>
-        <td><span class="status-pill status-${a.status}">${a.status.replace('_',' ')}</span></td>
+        <td><span class="status-pill status-${a.status}">${a.status.replace(/_/g,' ')}</span></td>
         <td>${escapeHtml(a.chn || '—')}</td>
         <td class="table-actions"><button class="link-btn" onclick="viewApplication('${a.id}')">View</button></td>
       </tr>`;
@@ -1465,7 +1468,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     const historyHtml = `<div class="detail-section">
       <h4>Status history</h4>
       <ul class="history-list">
-        ${(history || []).map(h => `<li>${escapeHtml(h.status.replace('_',' '))} — ${escapeHtml(h.changed_by)} — ${new Date(h.changed_at).toLocaleString()}${h.reason ? ' — ' + escapeHtml(h.reason) : ''}</li>`).join('')}
+        ${(history || []).map(h => `<li>${escapeHtml(h.status.replace(/_/g,' '))} — ${escapeHtml(h.changed_by)} — ${new Date(h.changed_at).toLocaleString()}${h.reason ? ' — ' + escapeHtml(h.reason) : ''}</li>`).join('')}
       </ul>
     </div>`;
 
@@ -1477,7 +1480,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <div class="detail-overview">
           <div>
             <h3>${escapeHtml(app.applicant_name || 'Untitled application')}</h3>
-            <div class="ref">${escapeHtml(app.application_reference)} · <span class="status-pill status-${app.status}">${app.status.replace('_',' ')}</span></div>
+            <div class="ref">${escapeHtml(app.application_reference)} · <span class="status-pill status-${app.status}">${app.status.replace(/_/g,' ')}</span></div>
           </div>
           <div class="detail-actions">${actions}</div>
         </div>
@@ -1502,8 +1505,23 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   function renderActionButtons(app){
     let buttons = '';
     if(app.status === 'submitted'){
-      buttons += `<button class="btn btn-ghost" onclick="startReview('${app.id}')">Start review</button>`;
+      buttons += `<button class="btn btn-ghost" onclick="startClientServiceReview('${app.id}')">Start Client Service review</button>`;
     }
+    if(app.status === 'under_review_client_service'){
+      buttons += `
+        <button class="btn btn-primary" onclick="advanceToCompliance('${app.id}')">Approve → Compliance review</button>
+        <button class="btn btn-ghost" style="color:#b3452f; border-color:#b3452f;" onclick="openRejectModal('${app.id}')">Reject</button>
+      `;
+    }
+    if(app.status === 'under_review_compliance'){
+      buttons += `
+        <button class="btn btn-primary" onclick="openOpenedModal('${app.id}')">Approve &amp; mark opened</button>
+        <button class="btn btn-ghost" style="color:#b3452f; border-color:#b3452f;" onclick="openRejectModal('${app.id}')">Reject</button>
+      `;
+    }
+    // Legacy: applications still sitting at the old single 'under_review'
+    // status from before the two-stage pipeline. Kept actionable rather
+    // than stuck — admin can still move them straight to opened/rejected.
     if(app.status === 'under_review'){
       buttons += `
         <button class="btn btn-primary" onclick="openOpenedModal('${app.id}')">Mark as opened</button>
@@ -1572,9 +1590,18 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     return result;
   }
 
-  window.startReview = async function(id){
+  window.startClientServiceReview = async function(id){
     try{
-      await callStatusUpdate({ applicationId: id, newStatus: 'under_review' });
+      await callStatusUpdate({ applicationId: id, newStatus: 'under_review_client_service' });
+      await viewApplication(id);
+    } catch(err){
+      alert(err.message);
+    }
+  };
+
+  window.advanceToCompliance = async function(id){
+    try{
+      await callStatusUpdate({ applicationId: id, newStatus: 'under_review_compliance' });
       await viewApplication(id);
     } catch(err){
       alert(err.message);

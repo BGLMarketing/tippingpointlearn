@@ -19,7 +19,7 @@ const {
 // tables — this file shares just the admin auth check and otherwise
 // keeps each handler's logic unchanged, dispatching on `domain`.
 
-const APPLICATION_TRANSITIONS = ['under_review', 'opened', 'rejected'];
+const APPLICATION_TRANSITIONS = ['under_review_client_service', 'under_review_compliance', 'opened', 'rejected'];
 const IPO_TRANSITIONS = ['payment_confirmed', 'payment_unconfirmed', 'pending_execution', 'executed', 'allotted'];
 
 module.exports = async (req, res) => {
@@ -82,8 +82,15 @@ async function handleApplicationStatus(res, adminEmail, body) {
     }
 
     const update = { status: newStatus };
-    if (newStatus === 'under_review') {
+    if (newStatus === 'under_review_client_service') {
       update.review_started_at = new Date().toISOString();
+      update.reviewed_by = adminEmail;
+    } else if (newStatus === 'under_review_compliance') {
+      // Second review stage — reviewed_by is overwritten to whoever
+      // advanced it here; review_started_at is left as the original
+      // client-service review start. The full per-stage history
+      // (who, when, at which status) is captured in
+      // application_status_history regardless, via the insert below.
       update.reviewed_by = adminEmail;
     } else if (newStatus === 'opened') {
       update.opened_at = new Date().toISOString();
@@ -112,12 +119,17 @@ async function handleApplicationStatus(res, adminEmail, body) {
 
     if (appRow.applicant_email) {
       try {
-        if (newStatus === 'under_review') {
+        if (newStatus === 'under_review_client_service') {
           await sendApplicantUnderReviewEmail({
             applicantEmail: appRow.applicant_email,
             applicantName: appRow.applicant_name,
             applicationReference: appRow.application_reference
           });
+        } else if (newStatus === 'under_review_compliance') {
+          // Intentionally no customer email — this is an internal
+          // handoff between review stages, not a change the
+          // applicant needs to hear about. They already know their
+          // application is under review from the previous stage.
         } else if (newStatus === 'opened') {
           await sendApplicantOpenedEmail({
             applicantEmail: appRow.applicant_email,

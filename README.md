@@ -151,17 +151,35 @@ other page, so it's a normal Netlify-served page like `/faq` or
     (filterable by status, searchable by name/email/reference), a detail
     view (applicant/company info, banking, uploaded documents via
     short-lived signed URLs, and full status history), and the actions
-    to move an application `submitted → under_review → opened/rejected`.
-    Marking an application **opened** requires a CHN and CSCS Account
-    Number; **rejecting** requires a reason of at least 10 characters —
-    both are enforced in `netlify/functions/update-status.js`,
-    which also sends the applicant the matching status email and writes
-    the audit trail row. The admin page never writes these tables
+    to move an application through a two-stage review pipeline:
+    `submitted → under_review_client_service → under_review_compliance
+    → opened`. Admin approves at each stage to advance it — there's no
+    way to skip a stage from the UI. **Rejecting** is available at any
+    of the first three stages and is terminal: a rejected applicant
+    would need to submit a fresh application, there's no resubmit/edit
+    flow. Marking an application **opened** requires a CHN and CSCS
+    Account Number; **rejecting** requires a reason of at least 10
+    characters — both are enforced in `netlify/functions/update-status.js`,
+    which also writes the audit trail row for every transition. Only the
+    `under_review_client_service` transition emails the applicant
+    ("your application is under review") — the later move to
+    `under_review_compliance` is a silent internal handoff, since from
+    the applicant's side nothing has visibly changed yet; `opened` and
+    `rejected` both email the outcome. Run
+    `supabase/migration_two_stage_review.sql` once (after `schema.sql`)
+    to update the status column's allowed values — the old single
+    `under_review` status is kept valid for any pre-migration rows
+    still sitting in it (they remain actionable from the admin UI,
+    moving straight to opened/rejected) but nothing new is ever written
+    with that value. The admin page never writes these tables
     directly — only that function does, using the service role key, so
     the emails and audit trail can't be bypassed by calling Supabase
     straight from the browser. Run `supabase/admin_policies.sql` once
     (after `schema.sql`) to grant the authenticated admin session
     read-only access to these tables and to the document storage bucket.
+  - **Completion screen**: after submitting, the applicant sees a
+    reference number and a note that account opening typically takes
+    between 24 and 48 hours.
   - **Resending a notification**: every application in the detail view
     has a "Resend notification email" action (`resend-notification.js`),
     which re-sends whatever email matches the application's *current*
@@ -248,6 +266,26 @@ other page, so it's a normal Netlify-served page like `/faq` or
 
 ## Dangote IPO subscription
 
+**Currently inert.** `/dangote-ipo/subscribe` is a placeholder page,
+not the wizard — a separate white-labelled solution is expected to be
+pointed at this URL, so the built wizard was intentionally taken off
+the live path rather than left to go live on its own. Nothing was
+deleted: the full wizard (everything described below) is preserved in
+git history and stays there until someone decides otherwise. Two
+things enforce this beyond just the placeholder page — `submit-ipo-subscription.js`
+has a hardcoded `SUBSCRIPTIONS_ENABLED = false` kill switch checked
+before anything else (a well-formed submission gets a 403 regardless
+of date), and `dangote-ipo/index.html` has `SUBSCRIBE_ROUTE_LIVE = false`
+so the marketing page's "Subscribe" button never auto-reveals and
+points visitors at a dead end. To bring the wizard back: flip both
+flags to `true` and restore `dangote-ipo/subscribe/index.html` from
+git history (or from the `staging/ipo-referral-commissions` branch,
+which has it plus a referral field, cascading state/LGA and country
+dropdowns, and several validation fixes on top).
+
+The rest of this section describes the wizard as built, for whenever
+it's switched back on.
+
 `/dangote-ipo` is the public campaign page (offer terms, FAQ, waitlist).
 Once the offer is open, it links to `/dangote-ipo/subscribe`, a
 multi-step wizard for actually subscribing to units — Individual,
@@ -259,7 +297,7 @@ directly to Supabase Storage via signed URLs, and required-field/
 required-document validation that only enforces currently-visible
 fields.
 
-- **Offer terms**: currently ₦525 per unit, 50,000-unit minimum, then
+- **Offer terms**: currently ₦525 per unit, 5,000-unit minimum, then
   multiples of 10 above that — enforced both client-side (live Naira
   calculation as units are entered) and server-side in
   `submit-ipo-subscription.js`. If the terms change for a future offer,
