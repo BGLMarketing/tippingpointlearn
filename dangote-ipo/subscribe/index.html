@@ -1194,7 +1194,7 @@ function bankingStepHtml(){
     <legend>Bank details</legend>
     <div class="aow-grid">
       ${bankNameField('banking')}
-      ${textField('banking','accountNumber','Account number',true)}
+      ${digitField('banking','accountNumber','Account number',10,true)}
       ${textField('banking','branch','Branch',true)}
       ${textField('banking','cityState','City/State',true)}
       ${digitField('banking','bvn','BVN',11,true)}
