@@ -100,6 +100,13 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     text-decoration:none;
     white-space:nowrap;
   }
+  /* `.btn`'s own `display:inline-flex` has the same specificity as the
+     browser's default `[hidden]{display:none}` rule, and comes later in
+     the cascade, so it silently wins — a `.btn` element with the hidden
+     attribute stayed visible regardless. This is what let both
+     "Subscribe to the IPO" and "Get notified" show at once instead of
+     the JS toggle in updateIpoOfferState() hiding one of them. */
+  .btn[hidden]{ display:none !important; }
   .btn-primary{background:var(--green-deep); color:var(--paper);}
   .btn-primary:hover{background:var(--green-mid); transform:translateY(-2px); box-shadow:0 10px 24px rgba(18,60,41,0.25);}
   .btn-ghost{background:transparent; border-color:var(--line-dark); color:var(--ink);}
@@ -906,7 +913,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div class="dip-hero-facts">
         <div class="dip-hero-fact"><span class="num">₦525</span><span class="lbl">Per Unit</span></div>
         <div class="dip-hero-fact"><span class="num">14 Sept 2026</span><span class="lbl">Offer Opens</span></div>
-        <div class="dip-hero-fact"><span class="num">5,000</span><span class="lbl">Minimum Units</span></div>
+        <div class="dip-hero-fact"><span class="num">10</span><span class="lbl">Minimum Units</span></div>
       </div>
       <div class="dip-hero-actions">
         <button class="btn btn-gold" data-ipo-subscribe-btn hidden onclick="location.href='/dangote-ipo/subscribe'">Subscribe to the IPO</button>
@@ -955,13 +962,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <h2>What is the Dangote Refinery IPO?</h2>
       <p>The Dangote Petroleum Refinery & Petrochemicals complex, built in the Lekki Free Trade Zone in Lagos, is the world's largest single-train oil refinery — a project that's already reshaped Nigeria's fuel supply since it began operations in 2024.</p>
       <p>The company, part of the Dangote Group, is going public through an Initial Public Offering (IPO) on the Nigerian Exchange (NGX) — one of the largest public listings in African history, with a portion of the company's equity being floated to raise capital for further expansion.</p>
-      <p>The offer opens <strong>14 September 2026</strong> at <strong>₦525 per unit</strong>, with a minimum subscription of 5,000 units (₦2,625,000), and subsequent applications in multiples of 10 units (₦5,250). You can subscribe directly through Tipping Point, powered by BGL Securities.</p>
+      <p>The offer opens <strong>14 September 2026</strong> at <strong>₦525 per unit</strong>, with a minimum subscription of 10 units (₦5,250), in multiples of 10 units thereafter. You can subscribe directly through Tipping Point, powered by BGL Securities.</p>
       <p class="dip-note">Figures above reflect the official offer terms. Read the full prospectus for complete details before subscribing.</p>
     </div>
     <div class="dip-stat-grid">
       <div class="dip-stat"><span class="num">₦525</span><span class="lbl">Price per Unit</span></div>
       <div class="dip-stat"><span class="num">14 Sept 2026</span><span class="lbl">Offer Opens</span></div>
-      <div class="dip-stat"><span class="num">5,000</span><span class="lbl">Minimum Units</span></div>
+      <div class="dip-stat"><span class="num">10</span><span class="lbl">Minimum Units</span></div>
       <div class="dip-stat"><span class="num">NGX</span><span class="lbl">Target Listing</span></div>
     </div>
   </div>
@@ -1000,7 +1007,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         </div>
         <div class="step-num">2</div>
         <h3>Indicate Your Preferred Number of Units</h3>
-        <p>Tell us how many units you'd like to subscribe for, right from the app — starting at 5,000 units (₦2,625,000), in multiples of 10 thereafter.</p>
+        <p>Tell us how many units you'd like to subscribe for, right from the app — starting at 10 units (₦5,250), in multiples of 10 thereafter.</p>
         <span class="dip-step-arrow">→</span>
       </div>
       <div class="dip-step">
@@ -1206,7 +1213,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div class="faq-item">
         <button class="faq-q"><span><span class="qnum">09</span>What is the minimum investment amount?</span><span class="chev">＋</span></button>
         <div class="faq-a"><div class="faq-a-inner">
-          <p>The minimum subscription is 5,000 units at ₦525 per unit — ₦2,625,000. After that, you can apply in multiples of 10 units (₦5,250) at a time.</p>
+          <p>The minimum subscription is 10 units at ₦525 per unit — ₦5,250 — and you can apply in multiples of 10 units after that.</p>
         </div></div>
       </div>
 

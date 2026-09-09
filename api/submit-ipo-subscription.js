@@ -42,10 +42,10 @@ module.exports = async (req, res) => {
   const amountPayable = Number(data?.participation?.amountPayable) || 0;
   const referredBy = (data?.participation?.referredBy || '').trim() || null;
 
-  if (!numberOfUnits || numberOfUnits < 5000) {
-    return res.status(400).json({ error: 'Minimum subscription is 5,000 units.' });
+  if (!numberOfUnits || numberOfUnits < 10) {
+    return res.status(400).json({ error: 'Minimum subscription is 10 units.' });
   }
-  if ((numberOfUnits - 5000) % 10 !== 0) {
+  if ((numberOfUnits - 10) % 10 !== 0) {
     return res.status(400).json({ error: 'Units above the minimum must be in multiples of 10.' });
   }
 
