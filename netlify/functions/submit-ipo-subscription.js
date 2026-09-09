@@ -56,10 +56,10 @@ exports.handler = async (event) => {
   const numberOfUnits = Number(data?.participation?.numberOfUnits) || 0;
   const amountPayable = Number(data?.participation?.amountPayable) || 0;
 
-  if (!numberOfUnits || numberOfUnits < 5000) {
-    return jsonResponse(400, { error: 'Minimum subscription is 5,000 units.' });
+  if (!numberOfUnits || numberOfUnits < 10) {
+    return jsonResponse(400, { error: 'Minimum subscription is 10 units.' });
   }
-  if ((numberOfUnits - 5000) % 10 !== 0) {
+  if ((numberOfUnits - 10) % 10 !== 0) {
     return jsonResponse(400, { error: 'Units above the minimum must be in multiples of 10.' });
   }
 
