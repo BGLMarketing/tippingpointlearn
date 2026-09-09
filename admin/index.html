@@ -1087,6 +1087,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
 <script>
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const SITE_URL = 'https://tippingpoint.bglafrica.com';
 
   const loginView = document.getElementById('login-view');
   const dashboardView = document.getElementById('dashboard-view');
@@ -2102,12 +2103,29 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <td>${ipoSubscribers}</td>
         <td>${formatNairaAdmin(commission)}</td>
         <td>${date}</td>
-        <td class="table-actions"><button class="link-btn danger" onclick="deleteReferralCode('${c.id}','${escapeHtml(c.code)}')">Delete</button></td>
+        <td class="table-actions">
+          <button class="link-btn" onclick="copyReferralKit(event, '${escapeHtml(c.code)}')">Copy links</button>
+          <button class="link-btn danger" onclick="deleteReferralCode('${c.id}','${escapeHtml(c.code)}')">Delete</button>
+        </td>
       </tr>`;
     }).join('');
 
     document.getElementById('referral-total-commission').textContent = formatNairaAdmin(totalCommission);
     totalsRow.hidden = false;
+  }
+
+  function copyReferralKit(evt, code){
+    const accountLink = `${SITE_URL}/open-account?ref=${encodeURIComponent(code)}`;
+    const ipoLink = `${SITE_URL}/dangote-ipo/subscribe?ref=${encodeURIComponent(code)}`;
+    const text = `Referral code: ${code}\nOpen a BGL account: ${accountLink}\nSubscribe to the Dangote IPO: ${ipoLink}`;
+    const btn = evt.currentTarget;
+    navigator.clipboard.writeText(text).then(() => {
+      const original = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = original; }, 1500);
+    }).catch(() => {
+      alert('Could not copy automatically — here are the details to share manually:\n\n' + text);
+    });
   }
 
   document.getElementById('referral-form').addEventListener('submit', async (e) => {
