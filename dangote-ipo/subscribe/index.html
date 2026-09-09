@@ -761,6 +761,35 @@ function clearPersistedState(){
   try{ sessionStorage.removeItem(PERSIST_KEY); } catch(e){}
 }
 
+// These three are declared here — before tryResume() — rather than
+// near the functions that use them, because tryResume() runs
+// immediately and can call straight into renderStep() when resuming
+// a session already in progress. A resumed session might be sitting
+// on the banking or documents step, whose render/handler functions
+// reference these. const/let are only usable after their own
+// declaration line actually executes ("temporal dead zone") — having
+// them declared further down, after code that could already call
+// into them, throws a ReferenceError on any resumed session (caught
+// in testing: 'Cannot access activeUploads/MAX_FILE_SIZE before
+// initialization').
+const NIGERIAN_BANKS = [
+  'Access Bank','Citibank Nigeria','Coronation Merchant Bank','Ecobank Nigeria',
+  'Fidelity Bank','First Bank of Nigeria','First City Monument Bank (FCMB)',
+  'FSDH Merchant Bank','Globus Bank','Greenwich Merchant Bank',
+  'Guaranty Trust Bank (GTBank)','Heritage Bank','Jaiz Bank','Keystone Bank',
+  'Lotus Bank','Nova Merchant Bank','Optimus Bank','Parallex Bank',
+  'Polaris Bank','Premium Trust Bank','Providus Bank','Rand Merchant Bank',
+  'Signature Bank','Stanbic IBTC Bank','Standard Chartered Bank',
+  'Sterling Bank','SunTrust Bank','TAJ Bank','Titan Trust Bank',
+  'Union Bank of Nigeria','United Bank for Africa (UBA)','Unity Bank',
+  'Wema Bank','Zenith Bank',
+  'Carbon','Hope PSB','Kuda Bank','Mint Finex MFB','Moniepoint MFB',
+  'MoMo PSB (MTN)','9PSB (9mobile)','Opay','PalmPay','Rubies Microfinance Bank',
+  'Smartcash PSB (Airtel)','Sparkle Microfinance Bank','VFD Microfinance Bank'
+];
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+let activeUploads = 0;
+
 (function tryResume(){
   if(!isIpoOfferOpen()){
     gateOfferNotOpen();
@@ -827,21 +856,6 @@ function digitField(prefix,key,label,digits,required){
   </div>`;
 }
 
-const NIGERIAN_BANKS = [
-  'Access Bank','Citibank Nigeria','Coronation Merchant Bank','Ecobank Nigeria',
-  'Fidelity Bank','First Bank of Nigeria','First City Monument Bank (FCMB)',
-  'FSDH Merchant Bank','Globus Bank','Greenwich Merchant Bank',
-  'Guaranty Trust Bank (GTBank)','Heritage Bank','Jaiz Bank','Keystone Bank',
-  'Lotus Bank','Nova Merchant Bank','Optimus Bank','Parallex Bank',
-  'Polaris Bank','Premium Trust Bank','Providus Bank','Rand Merchant Bank',
-  'Signature Bank','Stanbic IBTC Bank','Standard Chartered Bank',
-  'Sterling Bank','SunTrust Bank','TAJ Bank','Titan Trust Bank',
-  'Union Bank of Nigeria','United Bank for Africa (UBA)','Unity Bank',
-  'Wema Bank','Zenith Bank',
-  'Carbon','Hope PSB','Kuda Bank','Mint Finex MFB','Moniepoint MFB',
-  'MoMo PSB (MTN)','9PSB (9mobile)','Opay','PalmPay','Rubies Microfinance Bank',
-  'Smartcash PSB (Airtel)','Sparkle Microfinance Bank','VFD Microfinance Bank'
-];
 function bankNameField(prefix){
   const id = `${prefix}_bankName`;
   return `<div class="field">
@@ -863,7 +877,6 @@ function toggleConditional(id, show){ document.getElementById(id).style.display 
 function toggleBlock(id, show){ document.getElementById(id).style.display = show ? 'block' : 'none'; }
 
 /* ---------- documents ---------- */
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
 function uploadField(key, label, hint){
   const id = `dip_${key}`;
@@ -880,7 +893,6 @@ function uploadField(key, label, hint){
 }
 function formatMB(bytes){ return (bytes / (1024*1024)).toFixed(1) + 'MB'; }
 
-let activeUploads = 0;
 function updateNextButtonState(){
   const nextBtn = document.getElementById('aowNextBtn');
   if(!nextBtn) return;
