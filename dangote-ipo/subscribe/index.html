@@ -802,10 +802,10 @@ function clearPersistedState(){
 })();
 
 /* ---------- field renderers (same helpers as /open-account) ---------- */
-function textField(prefix,key,label,required,span){
+function textField(prefix,key,label,required,span,defaultValue){
   return `<div class="field ${span||''}">
     <label>${label}${required?'<span class="req">*</span>':''}</label>
-    <input type="text" data-field="${prefix}.${key}" ${required?'data-required="true"':''}>
+    <input type="text" data-field="${prefix}.${key}" ${required?'data-required="true"':''} ${defaultValue?`value="${escapeHtml(defaultValue)}"`:''}>
     <div class="err-msg">This field is required.</div>
   </div>`;
 }
@@ -1168,7 +1168,7 @@ function cscsStepHtml(){
     <div class="aow-grid">
       ${textField('cscs','chn','CHN (Clearing House Number)',false)}
       ${textField('cscs','cscsNumber','CSCS number',false)}
-      ${textField('cscs','stockbrokerName','Name of your stockbroker',true)}
+      ${textField('cscs','stockbrokerName','Name of your stockbroker',true,'',"BGL")}
       ${textField('cscs','memberCode','Member code',false)}
     </div>
   </fieldset>`;
