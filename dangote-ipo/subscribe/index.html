@@ -442,7 +442,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <span class="eyebrow" style="margin:0;">Powered by BGL Securities</span>
     </div>
     <h1>Subscribe to the Dangote Refinery IPO</h1>
-    <p class="lead">₦525 per unit, minimum 50,000 units. A few guided steps — you'll need a valid ID, your signature, and your payment evidence on hand.</p>
+    <p class="lead">₦525 per unit, minimum 5,000 units. A few guided steps — you'll need a valid ID, your signature, and your payment evidence on hand.</p>
   </div>
 </header>
 
@@ -720,7 +720,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
      ============================================================ -->
 <script>
 const UNIT_PRICE = 525;
-const MIN_UNITS = 50000;
+const MIN_UNITS = 5000;
 // Same offer-opening moment as /dangote-ipo — see that page's script
 // for the reasoning. Keep these two constants in sync if the date
 // ever changes.
@@ -1003,14 +1003,14 @@ function typeStepHtml(){
 
 function participationStepHtml(){
   return `<h2 class="aow-step-title">Participation details</h2>
-  <p class="aow-step-sub">₦${UNIT_PRICE} per unit. Minimum 50,000 units, then in multiples of 10.</p>
+  <p class="aow-step-sub">₦${UNIT_PRICE} per unit. Minimum ${MIN_UNITS.toLocaleString()} units, then in multiples of 10.</p>
   <fieldset>
     <legend>How many units?</legend>
     <div class="aow-grid single">
       <div class="field">
         <label>Number of units<span class="req">*</span></label>
         <input type="number" min="${MIN_UNITS}" step="10" id="units-input" data-field="participation.numberOfUnits" data-required="true" oninput="updateAmountPayable()">
-        <div class="err-msg">Minimum 50,000 units, then multiples of 10.</div>
+        <div class="err-msg">Minimum ${MIN_UNITS.toLocaleString()} units, then multiples of 10.</div>
       </div>
       <div class="field">
         <label>Amount payable</label>
