@@ -359,6 +359,20 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   #aowSuccess h2{font-size:22px; margin-bottom:10px;}
   #aowSuccess p{color:rgba(22,36,26,0.65); font-size:14px; max-width:46ch; margin:0 auto 6px; line-height:1.6;}
   .ref-pill{display:inline-block; background:var(--green-deep); color:var(--paper); font-weight:600; font-size:14px; padding:9px 20px; border-radius:100px; margin:16px 0; letter-spacing:.2px;}
+  .payment-details-card{
+    background:var(--paper-dim);
+    border:1px solid var(--line-dark);
+    border-radius:14px;
+    padding:20px 22px;
+    margin:20px auto 0;
+    max-width:420px;
+    text-align:left;
+  }
+  .payment-details-card h4{font-family:'Fraunces',serif; font-size:14.5px; color:var(--green-deep); margin:0 0 12px; font-weight:600;}
+  .payment-details-row{display:flex; justify-content:space-between; gap:16px; font-size:13.5px; padding:6px 0; border-bottom:1px solid var(--line-dark);}
+  .payment-details-row:last-child{border-bottom:none;}
+  .payment-details-row span:first-child{color:rgba(22,36,26,0.55);}
+  .payment-details-row span:last-child{text-align:right; font-weight:700; font-family:'IBM Plex Mono', monospace;}
 
   @media (max-width:680px){
     .container{ padding:0 20px; }
@@ -463,6 +477,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <p>We've received your Dangote IPO subscription and will confirm your payment shortly.</p>
       <div class="ref-pill" id="aowRefPill">DGT-00000000-0000</div>
       <p>We'll email you at <strong id="aowRefEmail"></strong> as your subscription progresses.</p>
+      <div id="aowPaymentDetails"></div>
       <button class="btn btn-ghost" style="margin-top:20px;" onclick="clearPersistedState(); location.reload();">Start another subscription</button>
     </div>
 
@@ -771,6 +786,17 @@ function clearPersistedState(){
     document.getElementById('aowWizard').style.display = 'block';
     renderStep();
   }
+  // A referral code arriving via a shared link (e.g.
+  // /dangote-ipo/subscribe?ref=TEMI2026) takes priority even over a
+  // resumed session's existing value — clicking a link is an explicit
+  // signal. Same pattern as /open-account.
+  const urlParams = new URLSearchParams(window.location.search);
+  const refParam = urlParams.get('ref');
+  if(refParam){
+    if(!state.participation) state.participation = {};
+    state.participation.referredBy = refParam;
+    persistState();
+  }
 })();
 
 /* ---------- field renderers (same helpers as /open-account) ---------- */
@@ -991,6 +1017,12 @@ function participationStepHtml(){
         <div id="amount-payable-display" style="font-size:22px; font-weight:700; color:var(--green-deep); padding:10px 0;">₦0</div>
       </div>
     </div>
+  </fieldset>
+  <fieldset>
+    <legend>Referral (optional)</legend>
+    <div class="aow-grid single">
+      ${textField('participation','referredBy','Referred by / Relationship Manager (optional)',false,'full')}
+    </div>
   </fieldset>`;
 }
 function updateAmountPayable(){
@@ -1116,6 +1148,7 @@ function reviewStepHtml(){
     ${reviewRow('Investor type', capitalize(f.investorType))}
     ${reviewRow('Units', f.participation.numberOfUnits)}
     ${reviewRow('Amount payable', f.participation.amountPayable ? '₦' + Number(f.participation.amountPayable).toLocaleString() : '')}
+    ${reviewRow('Referred by', f.participation.referredBy)}
   </div>`;
 
   if(f.investorType === 'corporate'){
@@ -1152,6 +1185,9 @@ function reviewStepHtml(){
 }
 function reviewRow(label, value){ return `<div class="review-row"><span>${label}</span><span>${value || '—'}</span></div>`; }
 function capitalize(s){ return s ? s.charAt(0).toUpperCase()+s.slice(1) : ''; }
+function escapeHtml(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 
 /* ---------- step config ---------- */
 function buildSteps(type){
@@ -1362,6 +1398,35 @@ function showSuccess(ref, email){
   document.getElementById('aowSuccess').style.display = 'block';
   document.getElementById('aowRefPill').textContent = ref;
   document.getElementById('aowRefEmail').textContent = email || 'your email';
+  renderPaymentDetails();
+}
+
+async function renderPaymentDetails(){
+  const el = document.getElementById('aowPaymentDetails');
+  el.innerHTML = '';
+  try{
+    const { data, error } = await sbUpload
+      .from('ipo_payment_account')
+      .select('bank_name, account_name, account_number')
+      .limit(1)
+      .maybeSingle();
+    if(error || !data || !data.account_number){
+      // Account details not configured yet — don't show a broken/empty
+      // card, just point people to the helpline instead.
+      el.innerHTML = `<p style="font-size:13.5px; color:rgba(22,36,26,0.65); margin-top:16px;">Call our 24/7 IPO helpline on <a href="tel:+2349154966790" style="color:var(--green-deep); font-weight:600;">09154966790</a> for payment instructions.</p>`;
+      return;
+    }
+    el.innerHTML = `
+      <div class="payment-details-card">
+        <h4>Pay into this account</h4>
+        <div class="payment-details-row"><span>Bank</span><span>${escapeHtml(data.bank_name || '—')}</span></div>
+        <div class="payment-details-row"><span>Account name</span><span>${escapeHtml(data.account_name || '—')}</span></div>
+        <div class="payment-details-row"><span>Account number</span><span>${escapeHtml(data.account_number)}</span></div>
+      </div>
+    `;
+  } catch(err){
+    el.innerHTML = `<p style="font-size:13.5px; color:rgba(22,36,26,0.65); margin-top:16px;">Call our 24/7 IPO helpline on <a href="tel:+2349154966790" style="color:var(--green-deep); font-weight:600;">09154966790</a> for payment instructions.</p>`;
+  }
 }
 
 /* ---------- notify me modal ---------- */

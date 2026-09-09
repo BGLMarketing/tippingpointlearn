@@ -865,15 +865,47 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
       <table class="article-table">
         <thead>
-          <tr><th>Agent</th><th>Code</th><th>Referrals</th><th>Created</th><th></th></tr>
+          <tr><th>Agent</th><th>Code</th><th>Accounts opened</th><th>IPO subscribers</th><th>Commission</th><th>Created</th><th></th></tr>
         </thead>
         <tbody id="referral-table-body">
-          <tr class="empty-row"><td colspan="5">Loading…</td></tr>
+          <tr class="empty-row"><td colspan="7">Loading…</td></tr>
         </tbody>
+        <tfoot>
+          <tr id="referral-totals-row" hidden>
+            <td colspan="4" style="text-align:right; font-weight:600;">Total commission owed</td>
+            <td id="referral-total-commission" style="font-weight:700;"></td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
       </table>
     </div>
 
     <div id="ipo-panel" hidden>
+
+      <div class="form-card" style="margin-bottom:24px;">
+        <h3>Payment account</h3>
+        <p style="font-size:14px; color:rgba(22,36,26,0.65); margin-bottom:20px; line-height:1.55;">Shown to subscribers as where to pay their IPO amount. Update this before the offer opens.</p>
+        <form id="ipo-payment-account-form">
+          <div class="field-row">
+            <div class="field">
+              <label for="ipo-pa-bank">Bank name</label>
+              <input type="text" id="ipo-pa-bank" placeholder="e.g. Access Bank">
+            </div>
+            <div class="field">
+              <label for="ipo-pa-account-name">Account name</label>
+              <input type="text" id="ipo-pa-account-name" placeholder="e.g. BGL Securities Limited">
+            </div>
+          </div>
+          <div class="field">
+            <label for="ipo-pa-account-number">Account number</label>
+            <input type="text" id="ipo-pa-account-number" placeholder="e.g. 0123456789">
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save payment account</button>
+          </div>
+          <div class="form-status" id="ipo-payment-account-status"></div>
+        </form>
+      </div>
 
       <div id="ipo-list-view">
         <div class="filter-row">
@@ -1324,7 +1356,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
     if(tab === 'applications') loadApplications();
     if(tab === 'referrals') loadReferralCodes();
-    if(tab === 'ipo') loadIpoSubscriptions();
+    if(tab === 'ipo'){ loadIpoSubscriptions(); loadIpoPaymentAccount(); }
   };
 
   /* ============================================================
@@ -1649,6 +1681,56 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     return '₦' + Number(n).toLocaleString('en-NG');
   }
 
+  let currentIpoPaymentAccountId = null;
+
+  async function loadIpoPaymentAccount(){
+    const statusEl = document.getElementById('ipo-payment-account-status');
+    statusEl.textContent = '';
+    statusEl.className = 'form-status';
+
+    const { data, error } = await sb.from('ipo_payment_account').select('*').limit(1).maybeSingle();
+    if(error){
+      statusEl.textContent = 'Could not load the payment account: ' + error.message;
+      statusEl.className = 'form-status error';
+      return;
+    }
+    if(!data) return; // seeded row should always exist, but don't blow up if it doesn't
+    currentIpoPaymentAccountId = data.id;
+    document.getElementById('ipo-pa-bank').value = data.bank_name || '';
+    document.getElementById('ipo-pa-account-name').value = data.account_name || '';
+    document.getElementById('ipo-pa-account-number').value = data.account_number || '';
+  }
+
+  document.getElementById('ipo-payment-account-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const statusEl = document.getElementById('ipo-payment-account-status');
+    statusEl.textContent = '';
+    statusEl.className = 'form-status';
+
+    if(!currentIpoPaymentAccountId){
+      statusEl.textContent = 'Payment account record not loaded yet — try reopening this tab.';
+      statusEl.className = 'form-status error';
+      return;
+    }
+
+    const { data: { session } } = await sb.auth.getSession();
+    const { error } = await sb.from('ipo_payment_account').update({
+      bank_name: document.getElementById('ipo-pa-bank').value.trim(),
+      account_name: document.getElementById('ipo-pa-account-name').value.trim(),
+      account_number: document.getElementById('ipo-pa-account-number').value.trim(),
+      updated_at: new Date().toISOString(),
+      updated_by: session ? session.user.email : null
+    }).eq('id', currentIpoPaymentAccountId);
+
+    if(error){
+      statusEl.textContent = error.message;
+      statusEl.className = 'form-status error';
+      return;
+    }
+    statusEl.textContent = 'Saved.';
+    statusEl.className = 'form-status success';
+  });
+
   async function loadIpoSubscriptions(){
     const listView = document.getElementById('ipo-list-view');
     const detailView = document.getElementById('ipo-detail-view');
@@ -1957,36 +2039,74 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     return code;
   }
 
+  // Commission is earned once a Dangote IPO subscription's payment has
+  // been verified — payment_confirmed and anything that's progressed
+  // past it (pending_execution, executed, allotted) all count, since
+  // the payment itself doesn't become unconfirmed again on the way to
+  // allotment. payment_pending and payment_unconfirmed don't count —
+  // no verified payment yet.
+  const IPO_PAID_STATUSES = ['payment_confirmed', 'pending_execution', 'executed', 'allotted'];
+  const REFERRAL_COMMISSION_RATE = 0.0025; // 0.25%
+
+  function formatNairaAdmin(n){ return '₦' + Number(n || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 }); }
+
   async function loadReferralCodes(){
     const tbody = document.getElementById('referral-table-body');
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Loading…</td></tr>';
+    const totalsRow = document.getElementById('referral-totals-row');
+    totalsRow.hidden = true;
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Loading…</td></tr>';
 
     const { data: codes, error } = await sb.from('referral_codes').select('*').order('created_at', { ascending: false });
     if(error){
-      tbody.innerHTML = `<tr class="empty-row"><td colspan="5">Error loading codes: ${escapeHtml(error.message)}</td></tr>`;
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="7">Error loading codes: ${escapeHtml(error.message)}</td></tr>`;
       return;
     }
     if(!codes || !codes.length){
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No referral codes yet.</td></tr>';
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No referral codes yet.</td></tr>';
       return;
     }
 
-    // One count query per code — fine at this scale (a handful of agents).
-    const counts = await Promise.all(codes.map(c =>
-      sb.from('account_opening_applications').select('id', { count: 'exact', head: true }).eq('referred_by', c.code)
-    ));
+    // Two queries per code (accounts + IPO subscriptions) — fine at
+    // this scale (a handful of agents). ilike matches case-
+    // insensitively, same as the public /referral-status lookup,
+    // since applicants type the code as free text.
+    const [accountRows, ipoRows] = await Promise.all([
+      Promise.all(codes.map(c =>
+        sb.from('account_opening_applications').select('status').ilike('referred_by', c.code)
+      )),
+      Promise.all(codes.map(c =>
+        sb.from('ipo_subscriptions').select('status, amount_payable').ilike('referred_by', c.code)
+      ))
+    ]);
+
+    let totalCommission = 0;
 
     tbody.innerHTML = codes.map((c, i) => {
-      const count = counts[i] && typeof counts[i].count === 'number' ? counts[i].count : '—';
+      const accounts = accountRows[i].data || [];
+      const accountsOpened = accounts.filter(a => a.status === 'opened').length;
+
+      const subs = ipoRows[i].data || [];
+      const ipoSubscribers = subs.length;
+      const paidAmount = subs
+        .filter(s => IPO_PAID_STATUSES.includes(s.status))
+        .reduce((sum, s) => sum + (Number(s.amount_payable) || 0), 0);
+      const commission = paidAmount * REFERRAL_COMMISSION_RATE;
+      totalCommission += commission;
+
       const date = new Date(c.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
       return `<tr>
         <td>${escapeHtml(c.agent_name)}</td>
         <td style="font-family:'IBM Plex Mono', monospace; font-size:12.5px;">${escapeHtml(c.code)}</td>
-        <td>${count}</td>
+        <td>${accountsOpened}</td>
+        <td>${ipoSubscribers}</td>
+        <td>${formatNairaAdmin(commission)}</td>
         <td>${date}</td>
         <td class="table-actions"><button class="link-btn danger" onclick="deleteReferralCode('${c.id}','${escapeHtml(c.code)}')">Delete</button></td>
       </tr>`;
     }).join('');
+
+    document.getElementById('referral-total-commission').textContent = formatNairaAdmin(totalCommission);
+    totalsRow.hidden = false;
   }
 
   document.getElementById('referral-form').addEventListener('submit', async (e) => {

@@ -3,8 +3,12 @@ const { supabase } = require('./utils/supabaseClient');
 // Public endpoint — no login required. A referral code is admin-issued
 // and not guessable (unlike a name or email), so a single matching
 // code is treated as sufficient access to see who used it. Only a
-// safe subset of fields is returned per application — never email,
-// banking details, or personal_info.
+// safe subset of fields is returned per application/subscription —
+// never email, banking details, personal_info, or commission figures
+// (commission is admin-only, shown in /admin, not here).
+//
+// One code now covers both BGL account opening and Dangote IPO
+// subscriptions — this endpoint reports both.
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -35,7 +39,7 @@ module.exports = async (req, res) => {
       return res.status(404).json({ error: "We couldn't find that referral code." });
     }
 
-    // referred_by is free text an applicant typed on the wizard, not
+    // referred_by is free text an applicant typed on a wizard, not
     // guaranteed to match the stored (always-uppercase) code's exact
     // case — match case-insensitively.
     const { data: applications, error: appsErr } = await supabase
@@ -43,13 +47,22 @@ module.exports = async (req, res) => {
       .select('application_reference, applicant_name, account_type, status, submitted_at, opened_at, chn')
       .ilike('referred_by', code)
       .order('submitted_at', { ascending: false });
-
     if (appsErr) throw appsErr;
+
+    const { data: subscriptions, error: subsErr } = await supabase
+      .from('ipo_subscriptions')
+      .select('subscription_reference, applicant_name, investor_type, status, submitted_at')
+      .ilike('referred_by', code)
+      .order('submitted_at', { ascending: false });
+    if (subsErr) throw subsErr;
+
+    const accountsOpened = (applications || []).filter(a => a.status === 'opened').length;
 
     return res.status(200).json({
       agentName: codeRow.agent_name,
       code: codeRow.code,
-      count: (applications || []).length,
+      accountsOpened,
+      ipoSubscribers: (subscriptions || []).length,
       applications: (applications || []).map(a => ({
         reference: a.application_reference,
         applicantName: a.applicant_name,
@@ -58,6 +71,13 @@ module.exports = async (req, res) => {
         submittedAt: a.submitted_at,
         openedAt: a.opened_at,
         chn: a.chn
+      })),
+      subscriptions: (subscriptions || []).map(s => ({
+        reference: s.subscription_reference,
+        applicantName: s.applicant_name,
+        investorType: s.investor_type,
+        status: s.status,
+        submittedAt: s.submitted_at
       }))
     });
   } catch (err) {

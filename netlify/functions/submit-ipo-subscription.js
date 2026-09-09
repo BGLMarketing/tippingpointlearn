@@ -40,6 +40,7 @@ exports.handler = async (event) => {
   const docs = Array.isArray(documents) ? documents : [];
   const numberOfUnits = Number(data?.participation?.numberOfUnits) || 0;
   const amountPayable = Number(data?.participation?.amountPayable) || 0;
+  const referredBy = (data?.participation?.referredBy || '').trim() || null;
 
   if (!numberOfUnits || numberOfUnits < 50000) {
     return jsonResponse(400, { error: 'Minimum subscription is 50,000 units.' });
@@ -63,6 +64,7 @@ exports.handler = async (event) => {
         applicant_phone: applicantPhone,
         number_of_units: numberOfUnits,
         amount_payable: amountPayable,
+        referred_by: referredBy,
         investor_info: data?.investor || {},
         corporate_info: data?.corporate || {},
         joint_applicant_info: data?.jointApplicant || {},

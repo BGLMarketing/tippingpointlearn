@@ -15,8 +15,9 @@ Static site for Tipping Point (BGL Securities' digital investment platform), cur
                     "Account opening" below
 /track-application → Public status lookup for a submitted application
                     (reference + email) — see "Account opening" below
-/referral-status  → Public lookup for a referral code (agent view of who
-                    used it) — see "Account opening" below
+/referral-status  → Public lookup for a referral code (agent view of
+                    accounts opened + IPO subscribers) — see
+                    "Referral codes" below
 ```
 
 Each page is a self-contained `index.html` (or `<name>.html` at root, which Netlify
@@ -208,26 +209,29 @@ other page, so it's a normal Netlify-served page like `/faq` or
   the community"). On `/open-account` itself, that same nav-cta slot
   becomes a static, non-clickable label — the same pattern used for
   "Learn" and "Dangote IPO" on their own pages.
-- **Referral codes**: admin creates a code per agent/relationship
+
+## Referral codes
+
+One `referral_codes` table now covers both `/open-account` and the
+Dangote IPO subscription wizard — a single code tracks an agent's BGL
+account referrals and their IPO subscription referrals together.
+
+- **Admin-issued codes**: admin creates a code per agent/relationship
   manager from the "Referral codes" tab in `/admin` (agent name +
   either a custom code or an auto-generated one, e.g. `RM-4X7QK2`).
-  Applicants enter that code in the existing "Referred by /
-  Relationship Manager" field — no change to that field itself, it's
-  still free text, so a typo or a code that was never actually issued
-  just won't match anything. Matching is case-insensitive: codes are
-  always stored uppercase, and the lookup matches the applicant's
-  typed value case-insensitively too. The agent can then check
-  `/referral-status` (public, no login) with their code to see a
-  count and list of every application referred with it and each one's
-  current status. Backed by `referral-lookup.js`, same pattern as
-  `track-application.js`: the code itself (admin-issued, not
-  guessable) is the access control, and only a safe subset of fields
-  is ever returned (reference, name, type, status — never email,
-  banking details, or documents). Admin manages the `referral_codes`
-  table directly from the browser (same as the Learn articles table)
-  rather than through a function, since creating/deleting a code has
-  no side effects like emails to trigger. Run `supabase/referral_codes.sql`
-  once to set up the table.
+  Applicants enter that code in the account-opening wizard's existing
+  "Referred by / Relationship Manager" field, or the IPO wizard's
+  "Referred by" field on the Participation step — no change to either
+  field itself, both are still free text, so a typo or a code that
+  was never actually issued just won't match anything. Matching is
+  case-insensitive: codes are always stored uppercase, and lookups
+  match the applicant's typed value case-insensitively too. Admin
+  manages the `referral_codes` table directly from the browser (same
+  as the Learn articles table) rather than through a function, since
+  creating/deleting a code has no side effects like emails to
+  trigger. Run `supabase/referral_codes.sql` once to set up the
+  table, then `supabase/migration_ipo_referral.sql` to add the
+  matching `referred_by` column to `ipo_subscriptions`.
 - **Self-service referral codes**: `/open-account`'s entry screen has
   two links — "Check your referrals" (straight to `/referral-status`)
   and "Refer someone to BGL", which opens a modal where anyone (not
@@ -240,11 +244,38 @@ other page, so it's a normal Netlify-served page like `/faq` or
   since the applicant explicitly chose that code. Self-service codes
   land in the same `referral_codes` table as admin-created ones
   (distinguished only by `created_by = 'self-service'`) and work
-  identically everywhere — `/referral-status`, the wizard's referral
-  field, etc. Visiting `/open-account?ref=<code>` pre-fills the
-  "Referred by" field automatically (reading the `ref` query param on
-  load), taking priority even over a resumed in-progress session,
-  since clicking a shared link is a clear, explicit signal.
+  identically everywhere. Visiting `/open-account?ref=<code>` or
+  `/dangote-ipo/subscribe?ref=<code>` pre-fills the referral field
+  automatically (reading the `ref` query param on load), taking
+  priority even over a resumed in-progress session, since clicking a
+  shared link is a clear, explicit signal.
+- **Public stats — `/referral-status`**: an agent checks their code
+  (no login) to see two counts — **BGL accounts opened** (only
+  applications that reached `opened` status, not every application
+  referred) and **Dangote IPO subscribers** (every IPO subscription
+  referred, at any status) — plus the underlying lists of each.
+  Backed by `referral-lookup.js`, same pattern as
+  `track-application.js`: the code itself (admin-issued or
+  self-service, not guessable) is the access control, and only a safe
+  subset of fields is ever returned per record (reference, name,
+  type, status — never email, banking details, documents, or
+  **commission figures**, which are admin-only).
+- **Commission — admin only**: the "Referral codes" tab in `/admin`
+  additionally shows, per code, **accounts opened**, **IPO
+  subscribers**, and **commission owed** — 0.25% of the total amount
+  payable across that code's IPO subscriptions that have reached
+  `payment_confirmed` or later (`payment_confirmed`,
+  `pending_execution`, `executed`, `allotted` all count; each of
+  those statuses implies payment was verified at `payment_confirmed`
+  and never gets un-verified moving forward — `payment_pending` and
+  `payment_unconfirmed` don't count, since there's no confirmed
+  payment yet). A footer row totals the commission owed across every
+  code. This is computed client-side in the admin page from the same
+  RLS-permitted authenticated reads already used elsewhere in
+  `/admin` — no new backend endpoint, and no commission ledger table;
+  if an audit trail of individual commission events becomes necessary
+  later, that's the natural next step, but wasn't needed for this
+  version.
 
 ## Dangote IPO subscription
 
@@ -322,6 +353,36 @@ fields.
   subscribe yet. Backed by the public `ipo-notify-signup.js`, writing
   to `ipo_notify_signups` — a separate table from the site's general
   waitlist, since these are specifically people who want IPO updates.
+- **Offer-open gating**: the offer opens 14 September 2026, 00:00 WAT.
+  `IPO_OFFER_OPENS_AT` (same constant, duplicated in `/dangote-ipo`,
+  `/dangote-ipo/subscribe`, and both copies of
+  `submit-ipo-subscription.js`) hides the "Subscribe" button and
+  blocks the wizard before that moment, showing "Get notified" instead
+  — self-updating on the day itself, no redeploy needed. The frontend
+  checks are a UI convenience only; `submit-ipo-subscription.js`
+  rejects submissions with a 403 before the opening moment regardless
+  of what the frontend shows, since that's what actually matters for
+  a subscription involving real money. If the date ever changes,
+  update all four copies of the constant together.
+- **Referral field**: see "Referral codes" above — the Participation
+  step has an optional "Referred by" field, reusing the same
+  `referral_codes` table and `?ref=<code>` link pattern as
+  `/open-account`.
+- **Payment account (admin-managed)**: the bank details subscribers
+  should pay into live in the single-row `ipo_payment_account` table
+  (`supabase/migration_ipo_payment_account.sql`), editable from a form
+  at the top of the "Dangote IPO" tab in `/admin` — admin writes it
+  directly from the browser via the authenticated Supabase client,
+  same pattern as Learn articles and referral codes, since there's no
+  side effect like an email to trigger. `/dangote-ipo/subscribe`'s
+  success screen reads this table with the **public anon key** (no
+  login) and displays it once a subscription is submitted — bank
+  account numbers for receiving payment are meant to be shared
+  publicly (the same way a business posts them for bank transfers),
+  so a public-read RLS policy here is intentional, not an oversight.
+  If the row hasn't been filled in yet, the success screen falls back
+  to pointing people at the IPO helpline instead of showing a blank
+  card.
 
 ## Deploying
 
@@ -336,6 +397,31 @@ Link to a Git repository), not the manual drag-and-drop dropzone — the
 functions under `netlify/functions/` only deploy through a Git-connected
 build (or the Netlify CLI), never through drag-and-drop. Once connected,
 every `git push` to `main` deploys automatically.
+
+### Testing risky changes on a staging branch first
+
+`main` deploys straight to the live, real-money site, so anything that
+touches money or a live pipeline (the IPO subscription flow,
+commission math, status transitions) should go through a staging
+branch first rather than landing on `main` directly:
+
+```
+git checkout -b staging/<short-description>
+# ... build and commit the change ...
+git push origin staging/<short-description>
+```
+
+Both Netlify and Vercel automatically build a **preview deployment**
+for any pushed branch (Netlify: Site settings → Build & deploy →
+Deploy contexts; Vercel does this by default) — that preview URL
+behaves exactly like production (same functions, same Supabase
+project, since there's no separate staging database) except it's not
+the domain anyone else is using. Test the change there; only merge
+the branch into `main` once it looks right. This doesn't isolate test
+data — a submission made on a preview URL still lands in the same
+production tables as a real one — but it does mean a half-finished or
+broken change is never live on `tippingpoint.bglafrica.com` while it's
+being built.
 
 ### Runs on Netlify or Vercel, without code changes
 
