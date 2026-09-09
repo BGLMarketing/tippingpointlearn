@@ -266,6 +266,23 @@ async function sendApplicantRejectedEmail({ applicantEmail, applicantName, appli
   });
 }
 
+async function sendReferralOtpEmail({ email, agentName, otp }) {
+  const body = `
+    <h2 style="font-size:18px; margin:0 0 16px; color:${BRAND.green};">Your referral verification code</h2>
+    <p style="font-size:14px; color:${BRAND.ink}; line-height:1.6;">Hi ${agentName || 'there'}, use this code to view your referral stats on Tipping Point:</p>
+    <p style="font-size:32px; font-weight:700; letter-spacing:6px; color:${BRAND.green}; text-align:center; margin:24px 0; font-family:monospace;">${otp}</p>
+    <p style="font-size:13px; color:${BRAND.muted}; line-height:1.6;">This code expires in 10 minutes. If you didn't request this, you can safely ignore this email — nobody can see your referral stats without also having access to this inbox.</p>
+  `;
+
+  const html = wrapEmail('Your referral verification code', body);
+
+  return sendEmail({
+    to: email,
+    subject: `Your referral verification code: ${otp}`,
+    html
+  });
+}
+
 module.exports = {
   wrapEmail,
   button,
@@ -274,5 +291,6 @@ module.exports = {
   sendApplicantConfirmationEmail,
   sendApplicantUnderReviewEmail,
   sendApplicantOpenedEmail,
-  sendApplicantRejectedEmail
+  sendApplicantRejectedEmail,
+  sendReferralOtpEmail
 };
