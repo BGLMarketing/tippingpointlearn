@@ -632,6 +632,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <input type="text" id="referName" placeholder="Your full name">
       </div>
       <div class="field">
+        <label>Your email</label>
+        <input type="email" id="referEmail" placeholder="you@email.com">
+      </div>
+      <p style="font-size:12px; color:rgba(22,36,26,0.5); margin:-8px 0 12px;">Required — this is where a verification code is sent when you check your referral stats on /referral-status.</p>
+      <div class="field">
         <label>Preferred code</label>
         <input type="text" id="referCode" placeholder="e.g. TEMI2026" style="text-transform:uppercase;">
       </div>
@@ -641,10 +646,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
     <div id="referSuccessView" style="display:none; text-align:center;">
       <div class="eyebrow">You're set</div>
-      <h3>Your referral link is ready</h3>
-      <p class="sub">Share this link — anyone who applies through it is automatically credited to you.</p>
-      <div style="background:var(--paper); border:1px solid var(--line-dark); border-radius:10px; padding:12px; font-family:'IBM Plex Mono', monospace; font-size:13px; word-break:break-all; margin-bottom:14px;" id="referLinkDisplay"></div>
-      <button class="btn btn-primary" style="width:100%; padding:13px;" onclick="copyReferLink(event)">Copy link</button>
+      <h3>Your referral links are ready</h3>
+      <p class="sub">Share whichever fits — each one is automatically credited to you.</p>
+      <p style="font-size:12px; color:rgba(22,36,26,0.5); margin:16px 0 4px; text-align:left;">BGL account opening</p>
+      <div style="background:var(--paper); border:1px solid var(--line-dark); border-radius:10px; padding:12px; font-family:'IBM Plex Mono', monospace; font-size:13px; word-break:break-all; margin-bottom:10px;" id="referLinkDisplay"></div>
+      <button class="btn btn-ghost" style="width:100%; padding:11px; margin-bottom:14px;" onclick="copyReferLink(event)">Copy account link</button>
+      <p style="font-size:12px; color:rgba(22,36,26,0.5); margin:0 0 4px; text-align:left;">Dangote IPO subscription</p>
+      <div style="background:var(--paper); border:1px solid var(--line-dark); border-radius:10px; padding:12px; font-family:'IBM Plex Mono', monospace; font-size:13px; word-break:break-all; margin-bottom:10px;" id="referIpoLinkDisplay"></div>
+      <button class="btn btn-ghost" style="width:100%; padding:11px;" onclick="copyReferIpoLink(event)">Copy IPO link</button>
       <p style="font-size:12.5px; color:rgba(22,36,26,0.55); margin-top:14px;">Your code: <strong id="referCodeDisplay"></strong> — check its status anytime at <a href="/referral-status" style="color:var(--green-deep);">/referral-status</a>.</p>
     </div>
   </div>
@@ -851,6 +860,7 @@ function openReferModal(){
   document.getElementById('referFormView').style.display = 'block';
   document.getElementById('referSuccessView').style.display = 'none';
   document.getElementById('referName').value = '';
+  document.getElementById('referEmail').value = '';
   document.getElementById('referCode').value = '';
   document.getElementById('referError').style.display = 'none';
   document.getElementById('referOverlay').classList.add('open');
@@ -861,13 +871,14 @@ function closeReferModal(){
 
 async function submitReferral(){
   const name = document.getElementById('referName').value.trim();
+  const email = document.getElementById('referEmail').value.trim();
   const code = document.getElementById('referCode').value.trim();
   const errEl = document.getElementById('referError');
   const btn = document.getElementById('referSubmitBtn');
   errEl.style.display = 'none';
 
-  if(!name || !code){
-    errEl.textContent = 'Please enter your name and a preferred code.';
+  if(!name || !email || !code){
+    errEl.textContent = 'Please enter your name, email, and a preferred code.';
     errEl.style.display = 'block';
     return;
   }
@@ -879,7 +890,7 @@ async function submitReferral(){
     const res = await fetch('/api/create-referral-code', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, code })
+      body: JSON.stringify({ name, email, code })
     });
     const result = await res.json();
     if(!res.ok){
@@ -891,6 +902,7 @@ async function submitReferral(){
     document.getElementById('referFormView').style.display = 'none';
     document.getElementById('referSuccessView').style.display = 'block';
     document.getElementById('referLinkDisplay').textContent = result.shareUrl;
+    document.getElementById('referIpoLinkDisplay').textContent = result.ipoShareUrl;
     document.getElementById('referCodeDisplay').textContent = result.code;
   } catch(err){
     errEl.textContent = 'Something went wrong. Please try again.';
@@ -903,6 +915,18 @@ async function submitReferral(){
 
 function copyReferLink(evt){
   const text = document.getElementById('referLinkDisplay').textContent;
+  const btn = evt.currentTarget;
+  navigator.clipboard.writeText(text).then(()=>{
+    const original = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(()=>{ btn.textContent = original; }, 1500);
+  }).catch(()=>{
+    alert('Could not copy automatically — please select and copy the link manually.');
+  });
+}
+
+function copyReferIpoLink(evt){
+  const text = document.getElementById('referIpoLinkDisplay').textContent;
   const btn = evt.currentTarget;
   navigator.clipboard.writeText(text).then(()=>{
     const original = btn.textContent;

@@ -859,6 +859,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
               <input type="text" id="ref-custom-code" placeholder="e.g. RM-4821">
             </div>
           </div>
+          <div class="field">
+            <label for="ref-agent-email">Agent's email</label>
+            <input type="email" id="ref-agent-email" required placeholder="agent@bglafrica.com">
+          </div>
+          <p style="font-size:12.5px; color:rgba(22,36,26,0.5); margin:-6px 0 14px;">Required — this is where their verification code is sent when they check their referral stats on /referral-status.</p>
           <div class="form-actions">
             <button type="submit" class="btn btn-primary">Create code</button>
           </div>
@@ -868,11 +873,18 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
       <table class="article-table">
         <thead>
-          <tr><th>Agent</th><th>Code</th><th>Referrals</th><th>Created</th><th></th></tr>
+          <tr><th>Agent</th><th>Code</th><th>Email</th><th>Accounts opened</th><th>IPO subscribers</th><th>Commission</th><th>Created</th><th></th></tr>
         </thead>
         <tbody id="referral-table-body">
-          <tr class="empty-row"><td colspan="5">Loading…</td></tr>
+          <tr class="empty-row"><td colspan="8">Loading…</td></tr>
         </tbody>
+        <tfoot>
+          <tr id="referral-totals-row" hidden>
+            <td colspan="5" style="text-align:right; font-weight:600;">Total commission owed</td>
+            <td id="referral-total-commission" style="font-weight:700;"></td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
       </table>
     </div>
 
@@ -1058,6 +1070,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
 <script>
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const SITE_URL = 'https://tippingpoint.bglafrica.com';
 
   const loginView = document.getElementById('login-view');
   const dashboardView = document.getElementById('dashboard-view');
@@ -1984,36 +1997,95 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     return code;
   }
 
+  // Commission is earned once a Dangote IPO subscription's payment has
+  // been verified — payment_confirmed and anything that's progressed
+  // past it (pending_execution, executed, allotted) all count, since
+  // the payment itself doesn't become unconfirmed again on the way to
+  // allotment. payment_pending and payment_unconfirmed don't count —
+  // no verified payment yet.
+  const IPO_PAID_STATUSES = ['payment_confirmed', 'pending_execution', 'executed', 'allotted'];
+  const REFERRAL_COMMISSION_RATE = 0.0025; // 0.25%
+
+  function formatNairaAdmin(n){ return '₦' + Number(n || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 }); }
+
   async function loadReferralCodes(){
     const tbody = document.getElementById('referral-table-body');
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Loading…</td></tr>';
+    const totalsRow = document.getElementById('referral-totals-row');
+    totalsRow.hidden = true;
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Loading…</td></tr>';
 
     const { data: codes, error } = await sb.from('referral_codes').select('*').order('created_at', { ascending: false });
     if(error){
-      tbody.innerHTML = `<tr class="empty-row"><td colspan="5">Error loading codes: ${escapeHtml(error.message)}</td></tr>`;
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="8">Error loading codes: ${escapeHtml(error.message)}</td></tr>`;
       return;
     }
     if(!codes || !codes.length){
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No referral codes yet.</td></tr>';
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="8">No referral codes yet.</td></tr>';
       return;
     }
 
-    // One count query per code — fine at this scale (a handful of agents).
-    const counts = await Promise.all(codes.map(c =>
-      sb.from('account_opening_applications').select('id', { count: 'exact', head: true }).eq('referred_by', c.code)
-    ));
+    // Two queries per code (accounts + IPO subscriptions) — fine at
+    // this scale (a handful of agents). ilike matches case-
+    // insensitively, same as the public /referral-status lookup,
+    // since applicants type the code as free text.
+    const [accountRows, ipoRows] = await Promise.all([
+      Promise.all(codes.map(c =>
+        sb.from('account_opening_applications').select('status').ilike('referred_by', c.code)
+      )),
+      Promise.all(codes.map(c =>
+        sb.from('ipo_subscriptions').select('status, amount_payable').ilike('referred_by', c.code)
+      ))
+    ]);
+
+    let totalCommission = 0;
 
     tbody.innerHTML = codes.map((c, i) => {
-      const count = counts[i] && typeof counts[i].count === 'number' ? counts[i].count : '—';
+      const accounts = accountRows[i].data || [];
+      const accountsOpened = accounts.filter(a => a.status === 'opened').length;
+
+      const subs = ipoRows[i].data || [];
+      const ipoSubscribers = subs.length;
+      const paidAmount = subs
+        .filter(s => IPO_PAID_STATUSES.includes(s.status))
+        .reduce((sum, s) => sum + (Number(s.amount_payable) || 0), 0);
+      const commission = paidAmount * REFERRAL_COMMISSION_RATE;
+      totalCommission += commission;
+
       const date = new Date(c.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+      const emailCell = c.email
+        ? `${escapeHtml(c.email)} <button class="link-btn" style="font-size:11px;" onclick="editReferralEmail('${c.id}', '${escapeHtml(c.email)}')">Edit</button>`
+        : `<span style="color:#b3452f; font-size:12.5px;">Missing — lookup blocked</span> <button class="link-btn" style="font-size:11px;" onclick="editReferralEmail('${c.id}', '')">Add email</button>`;
       return `<tr>
         <td>${escapeHtml(c.agent_name)}</td>
         <td style="font-family:'IBM Plex Mono', monospace; font-size:12.5px;">${escapeHtml(c.code)}</td>
-        <td>${count}</td>
+        <td style="font-size:13px;">${emailCell}</td>
+        <td>${accountsOpened}</td>
+        <td>${ipoSubscribers}</td>
+        <td>${formatNairaAdmin(commission)}</td>
         <td>${date}</td>
-        <td class="table-actions"><button class="link-btn danger" onclick="deleteReferralCode('${c.id}','${escapeHtml(c.code)}')">Delete</button></td>
+        <td class="table-actions">
+          <button class="link-btn" onclick="copyReferralKit(event, '${escapeHtml(c.code)}')">Copy links</button>
+          <button class="link-btn danger" onclick="deleteReferralCode('${c.id}','${escapeHtml(c.code)}')">Delete</button>
+        </td>
       </tr>`;
     }).join('');
+
+    document.getElementById('referral-total-commission').textContent = formatNairaAdmin(totalCommission);
+    totalsRow.hidden = false;
+  }
+
+  function copyReferralKit(evt, code){
+    const accountLink = `${SITE_URL}/open-account?ref=${encodeURIComponent(code)}`;
+    const ipoLink = `${SITE_URL}/dangote-ipo/subscribe?ref=${encodeURIComponent(code)}`;
+    const text = `Referral code: ${code}\nOpen a BGL account: ${accountLink}\nSubscribe to the Dangote IPO: ${ipoLink}`;
+    const btn = evt.currentTarget;
+    navigator.clipboard.writeText(text).then(() => {
+      const original = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = original; }, 1500);
+    }).catch(() => {
+      alert('Could not copy automatically — here are the details to share manually:\n\n' + text);
+    });
   }
 
   document.getElementById('referral-form').addEventListener('submit', async (e) => {
@@ -2023,15 +2095,23 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     statusEl.className = 'form-status';
 
     const agentName = document.getElementById('ref-agent-name').value.trim();
+    const agentEmail = document.getElementById('ref-agent-email').value.trim();
     let code = document.getElementById('ref-custom-code').value.trim();
     if(!code) code = generateReferralCode();
     code = code.toUpperCase(); // codes are always stored uppercase, matching is case-insensitive
+
+    if(!agentEmail){
+      statusEl.textContent = "An email is required — it's where the agent's verification code gets sent.";
+      statusEl.className = 'form-status error';
+      return;
+    }
 
     const { data: { session } } = await sb.auth.getSession();
 
     const { error } = await sb.from('referral_codes').insert({
       agent_name: agentName,
       code,
+      email: agentEmail,
       created_by: session ? session.user.email : null
     });
 
@@ -2044,9 +2124,27 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     statusEl.textContent = `Created code: ${code}`;
     statusEl.className = 'form-status success';
     document.getElementById('ref-agent-name').value = '';
+    document.getElementById('ref-agent-email').value = '';
     document.getElementById('ref-custom-code').value = '';
     await loadReferralCodes();
   });
+
+  window.editReferralEmail = async function(id, currentEmail){
+    const newEmail = prompt('Email for this referral code (used to send the OTP for /referral-status):', currentEmail || '');
+    if(newEmail === null) return; // cancelled
+    const trimmed = newEmail.trim();
+    if(trimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)){
+      alert('That doesn\'t look like a valid email address.');
+      return;
+    }
+    const { error } = await sb.from('referral_codes').update({ email: trimmed || null }).eq('id', id);
+    if(error){
+      alert(error.message);
+      return;
+    }
+    await loadReferralCodes();
+  };
+
 
   window.deleteReferralCode = async function(id, code){
     if(!confirm(`Delete referral code "${code}"? Applications already referred with it are not affected.`)) return;

@@ -22,9 +22,13 @@ module.exports = async (req, res) => {
 
   const name = (body.name || '').trim();
   let code = (body.code || '').trim().toUpperCase();
+  const email = (body.email || '').trim();
 
-  if (!name || !code) {
-    return res.status(400).json({ error: 'Please provide your name and a preferred code.' });
+  if (!name || !code || !email) {
+    return res.status(400).json({ error: 'Please provide your name, email, and a preferred code.' });
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'Please provide a valid email address.' });
   }
   if (!/^[A-Z0-9-]{3,20}$/.test(code)) {
     return res.status(400).json({ error: 'Codes can only use letters, numbers, and hyphens, and must be 3-20 characters.' });
@@ -44,13 +48,15 @@ module.exports = async (req, res) => {
     const { error: insertErr } = await supabase.from('referral_codes').insert({
       agent_name: name,
       code,
+      email,
       created_by: 'self-service'
     });
     if (insertErr) throw insertErr;
 
     return res.status(200).json({
       code,
-      shareUrl: `${SITE_URL}/open-account?ref=${encodeURIComponent(code)}`
+      shareUrl: `${SITE_URL}/open-account?ref=${encodeURIComponent(code)}`,
+      ipoShareUrl: `${SITE_URL}/dangote-ipo/subscribe?ref=${encodeURIComponent(code)}`
     });
   } catch (err) {
     console.error('create-referral-code error:', err);
