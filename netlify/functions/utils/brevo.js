@@ -113,12 +113,16 @@ async function sendEmail({ to, subject, html, replyTo }) {
     body: JSON.stringify(payload)
   });
 
+  console.log('[DIAG sendEmail] Brevo responded, status:', res.status, 'to:', JSON.stringify(payload.to), 'sender:', JSON.stringify(payload.sender));
+
   if (!res.ok) {
     const errText = await res.text();
     throw new Error(`Brevo send failed (${res.status}): ${errText}`);
   }
 
-  return res.json();
+  const responseJson = await res.json();
+  console.log('[DIAG sendEmail] Brevo success response:', JSON.stringify(responseJson));
+  return responseJson;
 }
 
 /* ============================================================
