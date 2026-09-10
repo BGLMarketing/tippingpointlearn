@@ -1449,12 +1449,19 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       const name = a.applicant_role === 'joint_partner'
         ? (info.name || '—')
         : [info.title, info.surname, info.otherNames].filter(Boolean).join(' ') || '—';
+      // Joint partner's form only collects a single 'address' field;
+      // every other role (primary, signatories) collects separate
+      // residential and permanent addresses.
+      const addressRows = a.applicant_role === 'joint_partner'
+        ? detailRow('Address', info.address)
+        : detailRow('Residential address', info.residentialAddress) + detailRow('Permanent address', info.permanentAddress);
       applicantsHtml += `<div class="detail-section">
         <h4>${roleLabels[role] || role}</h4>
         ${detailRow('Name', name)}
         ${detailRow('Email', info.email)}
         ${detailRow('Phone', info.phone)}
         ${detailRow('Occupation', info.occupation)}
+        ${addressRows}
         ${detailRow('PEP declared', a.pep_info && a.pep_info.pep)}
         ${detailRow('Indemnity accepted', a.indemnity_accepted ? 'Yes' : 'No')}
         ${detailRow('Risk disclosure accepted', a.risk_disclosure_accepted ? 'Yes, ' + new Date(a.risk_disclosure_accepted_at).toLocaleString() : 'No')}
