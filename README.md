@@ -305,7 +305,7 @@ directly to Supabase Storage via signed URLs, and required-field/
 required-document validation that only enforces currently-visible
 fields.
 
-- **Offer terms**: currently ₦525 per unit, 50,000-unit minimum, then
+- **Offer terms**: currently ₦525 per unit, 10-unit minimum, then
   multiples of 10 above that — enforced both client-side (live Naira
   calculation as units are entered) and server-side in
   `submit-ipo-subscription.js`. If the terms change for a future offer,
