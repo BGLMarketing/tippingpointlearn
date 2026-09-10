@@ -80,6 +80,7 @@ async function requestOtp(res, code) {
     if (!codeRow.email) {
       return res.status(403).json({ error: 'This code has no email on file yet — contact BGL to enable lookup for it.' });
     }
+    console.log('[DIAG referral-otp] code row found, email:', codeRow.email);
 
     // Cooldown: if a still-pending OTP was requested very recently for
     // this code, don't send another — avoids spam-emailing the
@@ -95,9 +96,11 @@ async function requestOtp(res, code) {
       .limit(1)
       .maybeSingle();
     if (recentErr) throw recentErr;
+    console.log('[DIAG referral-otp] recent row:', JSON.stringify(recent));
 
     const withinCooldown = recent &&
       (Date.now() - new Date(recent.created_at).getTime()) / 1000 < OTP_COOLDOWN_SECONDS;
+    console.log('[DIAG referral-otp] withinCooldown:', withinCooldown);
 
     if (!withinCooldown) {
       const generatedOtp = generateOtp();
@@ -107,11 +110,15 @@ async function requestOtp(res, code) {
         expires_at: new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString()
       });
       if (insertErr) throw insertErr;
+      console.log('[DIAG referral-otp] OTP row inserted, about to call sendReferralOtpEmail for', codeRow.email);
 
       // OTP delivery IS the point of this step — unlike an internal
       // alert, a failure here must be surfaced, not swallowed, since
       // the person genuinely won't be able to proceed without it.
       await sendReferralOtpEmail({ email: codeRow.email, agentName: codeRow.agent_name, otp: generatedOtp });
+      console.log('[DIAG referral-otp] sendReferralOtpEmail completed without throwing');
+    } else {
+      console.log('[DIAG referral-otp] SKIPPED sending — within cooldown window');
     }
 
     return res.status(200).json({ ok: true, maskedEmail: maskEmail(codeRow.email) });
