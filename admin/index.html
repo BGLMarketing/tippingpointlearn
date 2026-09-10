@@ -572,6 +572,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   .status-under_review{ background:rgba(226,160,64,0.16); color:#8a5c1e; }
   .status-under_review_client_service{ background:rgba(226,160,64,0.16); color:#8a5c1e; }
   .status-under_review_compliance{ background:rgba(226,160,64,0.28); color:#8a5c1e; font-weight:700; }
+  .status-account_opening_in_progress{ background:rgba(51,153,102,0.10); color:var(--green-deep); border:1px solid rgba(51,153,102,0.3); }
   .status-opened{ background:rgba(51,153,102,0.14); color:var(--green-deep); }
   .status-rejected{ background:rgba(179,69,47,0.12); color:#b3452f; }
   .status-payment_pending{ background:var(--paper-dim); border:1px solid var(--line-dark); color:rgba(22,36,26,0.6); }
@@ -821,6 +822,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
               <option value="submitted">Submitted</option>
               <option value="under_review_client_service">Under review — Client Service</option>
               <option value="under_review_compliance">Under review — Compliance</option>
+              <option value="account_opening_in_progress">Account opening in progress</option>
               <option value="opened">Opened</option>
               <option value="rejected">Rejected</option>
             </select>
@@ -1416,6 +1418,19 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
     currentApplication = app;
 
+    // The referrer's own email (from referral_codes), not the
+    // applicant's — the applicant's email is already shown further
+    // down under their own detail section, so repeating it here would
+    // just be redundant. This lets admin see, at a glance, both the
+    // code and who it belongs to. Only fetched if a code was actually
+    // entered; ilike matches case-insensitively, same as everywhere
+    // else a referral code is looked up.
+    let referrerEmail = null;
+    if(app.referred_by){
+      const { data: referralCode } = await sb.from('referral_codes').select('email').ilike('code', app.referred_by).maybeSingle();
+      referrerEmail = referralCode ? referralCode.email : null;
+    }
+
     const byRole = {};
     (applicants || []).forEach(a => { byRole[a.applicant_role] = a; });
 
@@ -1424,23 +1439,54 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     let applicantsHtml = '';
     Object.entries(byRole).forEach(([role, a]) => {
       const info = a.personal_info || {};
-      const name = a.applicant_role === 'joint_partner'
+      const pep = a.pep_info || {};
+      const isJointPartner = a.applicant_role === 'joint_partner';
+      const name = isJointPartner
         ? (info.name || '—')
         : [info.title, info.surname, info.otherNames].filter(Boolean).join(' ') || '—';
-      // Joint partner's form only collects a single 'address' field;
-      // every other role (primary, signatories) collects separate
-      // residential and permanent addresses.
-      const addressRows = a.applicant_role === 'joint_partner'
-        ? detailRow('Address', info.address)
-        : detailRow('Residential address', info.residentialAddress) + detailRow('Permanent address', info.permanentAddress);
+
+      // Joint partner's form collects a genuinely different field set
+      // (ID type/number/expiry, relationship, a single combined
+      // address) rather than the personal-details set every other
+      // role uses (gender, DOB, mother's maiden name, nationality,
+      // separate state-of-origin/LGA, separate residential/permanent
+      // address) — so this branches rather than trying to force one
+      // shared template over both shapes.
+      const roleSpecificRows = isJointPartner
+        ? detailRow('Relationship to primary holder', info.relationship)
+        + detailRow('ID type', info.idType)
+        + detailRow('ID number', info.idNumber)
+        + detailRow('ID expiry', info.idExpiry)
+        + detailRow('Date of birth', info.dob)
+        + detailRow('Alternate phone', info.altPhone)
+        + detailRow('State of origin / LGA', info.stateOrigin)
+        + detailRow('Address', info.address)
+        : detailRow('Gender', info.gender)
+        + detailRow('Date of birth', info.dob)
+        + detailRow("Mother's maiden name", info.mothersMaidenName)
+        + detailRow('Nationality', info.nationality)
+        + detailRow('State of origin', info.stateOfOrigin)
+        + detailRow('Local government', info.lga)
+        + detailRow('Residential address', info.residentialAddress)
+        + detailRow('Permanent address', info.permanentAddress);
+
+      // PEP sub-answers only mean anything once the main yes/no is
+      // known, and the "related name" fields only apply when that
+      // specific yes/no was "Yes" — showing them unconditionally would
+      // just be blank noise for the (usual) case where both are "No".
+      let pepRows = detailRow('Politically Exposed Person (PEP)', pep.pep);
+      if(pep.pep === 'Yes') pepRows += detailRow('PEP role / position', pep.pepRole);
+      pepRows += detailRow('Related to a PEP', pep.pepRelated);
+      if(pep.pepRelated === 'Yes') pepRows += detailRow('PEP name / relationship', pep.pepRelation);
+
       applicantsHtml += `<div class="detail-section">
         <h4>${roleLabels[role] || role}</h4>
         ${detailRow('Name', name)}
         ${detailRow('Email', info.email)}
         ${detailRow('Phone', info.phone)}
-        ${detailRow('Occupation', info.occupation)}
-        ${addressRows}
-        ${detailRow('PEP declared', a.pep_info && a.pep_info.pep)}
+        ${!isJointPartner ? detailRow('Occupation', info.occupation) : ''}
+        ${roleSpecificRows}
+        ${pepRows}
         ${detailRow('Indemnity accepted', a.indemnity_accepted ? 'Yes' : 'No')}
         ${detailRow('Risk disclosure accepted', a.risk_disclosure_accepted ? 'Yes, ' + new Date(a.risk_disclosure_accepted_at).toLocaleString() : 'No')}
       </div>`;
@@ -1453,10 +1499,15 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <h4>Company</h4>
         ${detailRow('Registered name', c.companyName)}
         ${detailRow('RC number', c.rcNumber)}
+        ${detailRow('Business type', c.businessType)}
+        ${detailRow('Nature of business', c.natureOfBusiness)}
         ${detailRow('TIN', c.tin)}
+        ${detailRow('Source of funds', c.sourceOfFunds)}
         ${detailRow('Email', c.email)}
         ${detailRow('Phone', c.phone)}
         ${detailRow('Business address', c.businessAddress)}
+        ${detailRow('State', c.state)}
+        ${detailRow('Country', c.country)}
       </div>`;
     }
 
@@ -1469,6 +1520,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       ${detailRow('Account type', banking.accountType)}
       ${detailRow('Direct settlement', banking.directSettlement)}
       ${detailRow('Source of funds', banking.sourceOfFunds)}
+      ${detailRow('BVN', banking.bvn)}
+      ${detailRow('NIN', banking.nin)}
+      ${detailRow('Tax ID', banking.taxId)}
     </div>`;
 
     const docsHtml = `<div class="detail-section">
@@ -1506,7 +1560,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         </div>
         ${detailRow('Account type', capitalize(app.account_type))}
         ${detailRow('Referred by', app.referred_by)}
-        ${detailRow('Email', app.applicant_email)}
+        ${app.referred_by ? detailRow("Referrer's email", referrerEmail) : ''}
         ${detailRow('Submitted', new Date(app.submitted_at).toLocaleString())}
         ${app.chn ? detailRow('CHN', app.chn) : ''}
         ${app.csc_account_number ? detailRow('CSCS Account Number', app.csc_account_number) : ''}
@@ -1535,9 +1589,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     }
     if(app.status === 'under_review_compliance'){
       buttons += `
-        <button class="btn btn-primary" onclick="openOpenedModal('${app.id}')">Approve &amp; mark opened</button>
+        <button class="btn btn-primary" onclick="advanceToAccountOpening('${app.id}')">Approve → Account opening in progress</button>
         <button class="btn btn-ghost" style="color:#b3452f; border-color:#b3452f;" onclick="openRejectModal('${app.id}')">Reject</button>
       `;
+    }
+    if(app.status === 'account_opening_in_progress'){
+      buttons += `<button class="btn btn-primary" onclick="openOpenedModal('${app.id}')">Mark as opened</button>`;
     }
     // Legacy: applications still sitting at the old single 'under_review'
     // status from before the two-stage pipeline. Kept actionable rather
@@ -1622,6 +1679,15 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   window.advanceToCompliance = async function(id){
     try{
       await callStatusUpdate({ applicationId: id, newStatus: 'under_review_compliance' });
+      await viewApplication(id);
+    } catch(err){
+      alert(err.message);
+    }
+  };
+
+  window.advanceToAccountOpening = async function(id){
+    try{
+      await callStatusUpdate({ applicationId: id, newStatus: 'account_opening_in_progress' });
       await viewApplication(id);
     } catch(err){
       alert(err.message);

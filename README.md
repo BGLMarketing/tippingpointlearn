@@ -151,27 +151,39 @@ other page, so it's a normal Netlify-served page like `/faq` or
     (filterable by status, searchable by name/email/reference), a detail
     view (applicant/company info, banking, uploaded documents via
     short-lived signed URLs, and full status history), and the actions
-    to move an application through a two-stage review pipeline:
+    to move an application through a three-stage review pipeline:
     `submitted → under_review_client_service → under_review_compliance
-    → opened`. Admin approves at each stage to advance it — there's no
-    way to skip a stage from the UI. **Rejecting** is available at any
-    of the first three stages and is terminal: a rejected applicant
-    would need to submit a fresh application, there's no resubmit/edit
-    flow. Marking an application **opened** requires a CHN and CSCS
-    Account Number; **rejecting** requires a reason of at least 10
-    characters — both are enforced in `netlify/functions/update-status.js`,
-    which also writes the audit trail row for every transition. Only the
-    `under_review_client_service` transition emails the applicant
-    ("your application is under review") — the later move to
-    `under_review_compliance` is a silent internal handoff, since from
-    the applicant's side nothing has visibly changed yet; `opened` and
-    `rejected` both email the outcome. Run
-    `supabase/migration_two_stage_review.sql` once (after `schema.sql`)
-    to update the status column's allowed values — the old single
-    `under_review` status is kept valid for any pre-migration rows
-    still sitting in it (they remain actionable from the admin UI,
-    moving straight to opened/rejected) but nothing new is ever written
-    with that value. The admin page never writes these tables
+    → account_opening_in_progress → opened`. Admin approves at each
+    stage to advance it — there's no way to skip a stage from the UI.
+    Compliance approval moves an application to
+    `account_opening_in_progress` as a plain status bump (no new
+    fields); a separate "Mark as opened" action at that stage is what
+    actually collects the CHN and CSCS Account Number. **Rejecting**
+    is available at any of the first three stages and is terminal: a
+    rejected applicant would need to submit a fresh application,
+    there's no resubmit/edit flow. Marking an application **opened**
+    requires a CHN and CSCS Account Number; **rejecting** requires a
+    reason of at least 10 characters — both are enforced in
+    `netlify/functions/update-status.js`, which also writes the audit
+    trail row for every transition. Only the `under_review_client_service`
+    transition emails the applicant ("your application is under
+    review") — the later moves to `under_review_compliance` and
+    `account_opening_in_progress` are silent internal handoffs, since
+    from the applicant's side nothing has visibly changed yet;
+    `opened` and `rejected` both email the outcome. Run
+    `supabase/migration_two_stage_review.sql` then
+    `supabase/migration_account_opening_in_progress.sql` once (after
+    `schema.sql`) to update the status column's allowed values — the
+    old single `under_review` status is kept valid for any
+    pre-migration rows still sitting in it (they remain actionable
+    from the admin UI, moving straight to opened/rejected) but
+    nothing new is ever written with that value. Run
+    `supabase/backfill_legacy_under_review_status.sql` to move any
+    existing `under_review` applications into the new pipeline's
+    first stage (`under_review_client_service`) rather than leaving
+    them on the legacy one-step fallback indefinitely — safe to
+    re-run, and logs the move in each application's status history.
+    The admin page never writes these tables
     directly — only that function does, using the service role key, so
     the emails and audit trail can't be bypassed by calling Supabase
     straight from the browser. Run `supabase/admin_policies.sql` once
@@ -180,6 +192,21 @@ other page, so it's a normal Netlify-served page like `/faq` or
   - **Completion screen**: after submitting, the applicant sees a
     reference number and a note that account opening typically takes
     between 24 and 48 hours.
+  - **Full data visibility**: the detail view shows every field the
+    wizard actually collects — including ones added after the initial
+    build (gender, DOB, mother's maiden name, nationality, state of
+    origin/LGA, BVN, NIN, Tax ID, and full PEP declarations with their
+    conditional follow-up fields) — rather than a partial subset. The
+    PEP yes/no questions specifically had a real bug fixed alongside
+    this: their radio inputs were missing the `data-field-radio`
+    attribute the wizard's collection logic depends on, so the answer
+    was never actually being saved for any submission until fixed —
+    a data-capture bug, not just a missing display. The overview's
+    "Referred by" row is paired with the *referrer's* email (looked
+    up from `referral_codes`), not the applicant's own email — the
+    applicant's email is already shown in their own detail section
+    below, so repeating it there was redundant, and knowing who a
+    referral code belongs to is more useful at a glance.
   - **Resending a notification**: every application in the detail view
     has a "Resend notification email" action (`resend-notification.js`),
     which re-sends whatever email matches the application's *current*

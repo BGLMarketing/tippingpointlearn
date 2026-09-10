@@ -19,7 +19,7 @@ const {
 // tables — this file shares just the admin auth check and otherwise
 // keeps each handler's logic unchanged, dispatching on `domain`.
 
-const APPLICATION_TRANSITIONS = ['under_review_client_service', 'under_review_compliance', 'opened', 'rejected'];
+const APPLICATION_TRANSITIONS = ['under_review_client_service', 'under_review_compliance', 'account_opening_in_progress', 'opened', 'rejected'];
 const IPO_TRANSITIONS = ['payment_confirmed', 'payment_unconfirmed', 'pending_execution', 'executed', 'allotted'];
 
 module.exports = async (req, res) => {
@@ -92,6 +92,10 @@ async function handleApplicationStatus(res, adminEmail, body) {
       // (who, when, at which status) is captured in
       // application_status_history regardless, via the insert below.
       update.reviewed_by = adminEmail;
+    } else if (newStatus === 'account_opening_in_progress') {
+      // Compliance has approved — this just marks the handoff to
+      // account opening itself. No new fields to set; the status
+      // change and the status-history row are the record of it.
     } else if (newStatus === 'opened') {
       update.opened_at = new Date().toISOString();
       update.opened_by = adminEmail;
@@ -130,6 +134,11 @@ async function handleApplicationStatus(res, adminEmail, body) {
           // handoff between review stages, not a change the
           // applicant needs to hear about. They already know their
           // application is under review from the previous stage.
+        } else if (newStatus === 'account_opening_in_progress') {
+          // Same reasoning — another internal handoff (compliance
+          // clearance to the account-opening step itself), not
+          // something the applicant needs a separate email about.
+          // They'll hear from us once it's actually opened.
         } else if (newStatus === 'opened') {
           await sendApplicantOpenedEmail({
             applicantEmail: appRow.applicant_email,

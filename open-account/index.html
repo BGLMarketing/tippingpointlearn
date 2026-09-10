@@ -1050,22 +1050,22 @@ function pepFields(prefix){
   <fieldset>
     <legend>Other disclosures</legend>
     <div class="aow-grid single">
-      <div class="field">
+      <div class="field" data-radio-group="${prefix}.pep">
         <label>Are you, or have you ever been, a Politically Exposed Person (PEP)?<span class="req">*</span></label>
         <div class="radio-row">
-          <label class="radio-opt"><input type="radio" name="${prefix}_pep" value="Yes" onchange="toggleConditional('${prefix}_pepRoleWrap', true)"> Yes</label>
-          <label class="radio-opt"><input type="radio" name="${prefix}_pep" value="No" onchange="toggleConditional('${prefix}_pepRoleWrap', false)"> No</label>
+          <label class="radio-opt"><input type="radio" name="${prefix}_pep" value="Yes" data-field-radio="${prefix}.pep" onchange="toggleConditional('${prefix}_pepRoleWrap', true)"> Yes</label>
+          <label class="radio-opt"><input type="radio" name="${prefix}_pep" value="No" data-field-radio="${prefix}.pep" onchange="toggleConditional('${prefix}_pepRoleWrap', false)"> No</label>
         </div>
       </div>
       <div class="field" id="${prefix}_pepRoleWrap" style="display:none;">
         <label>Role / position held</label>
         <input type="text" data-field="${prefix}.pepRole">
       </div>
-      <div class="field">
+      <div class="field" data-radio-group="${prefix}.pepRelated">
         <label>Are you related to or closely associated with a PEP?<span class="req">*</span></label>
         <div class="radio-row">
-          <label class="radio-opt"><input type="radio" name="${prefix}_pepRelated" value="Yes" onchange="toggleConditional('${prefix}_pepRelatedWrap', true)"> Yes</label>
-          <label class="radio-opt"><input type="radio" name="${prefix}_pepRelated" value="No" onchange="toggleConditional('${prefix}_pepRelatedWrap', false)"> No</label>
+          <label class="radio-opt"><input type="radio" name="${prefix}_pepRelated" value="Yes" data-field-radio="${prefix}.pepRelated" onchange="toggleConditional('${prefix}_pepRelatedWrap', true)"> Yes</label>
+          <label class="radio-opt"><input type="radio" name="${prefix}_pepRelated" value="No" data-field-radio="${prefix}.pepRelated" onchange="toggleConditional('${prefix}_pepRelatedWrap', false)"> No</label>
         </div>
       </div>
       <div class="field" id="${prefix}_pepRelatedWrap" style="display:none;">
@@ -1282,7 +1282,7 @@ function bankingStepHtml(){
       ${textField('banking','accountName','Account name',true)}
       ${digitField('banking','accountNumber','Account number',10,true)}
       ${selectField('banking','sourceOfFunds','Source of funds',['Salary','Business income','Investments','Inheritance','Other'],true)}
-      <div class="field">
+      <div class="field" data-radio-group="banking.accountType">
         <label>Account type<span class="req">*</span></label>
         <div class="radio-row">
           <label class="radio-opt"><input type="radio" name="banking_accountType" value="Current" data-field-radio="banking.accountType"> Current</label>
@@ -1292,7 +1292,7 @@ function bankingStepHtml(){
       ${digitField('banking','bvn','BVN',11,true)}
       ${isCorporate ? '' : digitField('banking','nin','NIN',11,true)}
       ${textField('banking','taxId','Tax ID (optional)',false)}
-      <div class="field">
+      <div class="field" data-radio-group="banking.directSettlement">
         <label>Opt in for CSCS Direct Settlement?<span class="req">*</span></label>
         <div class="radio-row">
           <label class="radio-opt"><input type="radio" name="banking_directSettlement" value="Yes" data-field-radio="banking.directSettlement"> Yes</label>
@@ -1345,7 +1345,7 @@ function sig2StepHtml(){
   <fieldset>
     <legend>Second signatory</legend>
     <div class="aow-grid single">
-      <div class="field">
+      <div class="field" data-radio-group="signatory2.hasSecondSignatory">
         <label>Does this account have a second authorised signatory?<span class="req">*</span></label>
         <div class="radio-row">
           <label class="radio-opt"><input type="radio" name="sig2_has" value="Yes" data-field-radio="signatory2.hasSecondSignatory" onchange="toggleBlock('sig2_fields_wrap', true)"> Yes</label>
@@ -1609,6 +1609,25 @@ function collectStep(){
     const [group,key] = el.dataset.fieldRadio.split('.');
     if(!state[group]) state[group] = {};
     state[group][key] = el.value;
+  });
+
+  // Required radio groups (PEP declarations, account type, direct
+  // settlement opt-in, second-signatory question) — every one is
+  // marked required in its label, but until now nothing actually
+  // enforced that, since the loop above only ever reads whichever
+  // option is checked and has no way to notice "none checked". A
+  // group hidden by a conditional toggle is skipped, same reasoning
+  // as hidden text fields above.
+  document.querySelectorAll('[data-radio-group]').forEach(wrap=>{
+    if(wrap.offsetParent === null) return; // hidden — not enforced
+    const groupPath = wrap.dataset.radioGroup;
+    const anyChecked = wrap.querySelector('input[type="radio"]:checked');
+    if(!anyChecked){
+      valid = false;
+      wrap.classList.add('invalid');
+    } else {
+      wrap.classList.remove('invalid');
+    }
   });
 
   // Required document uploads — a missing one is just as invalid as a
