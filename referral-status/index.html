@@ -702,7 +702,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     btn.textContent = 'Sending…';
 
     try{
-      const res = await fetch('/api/request-referral-otp', {
+      const res = await fetch('/api/referral-lookup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code })
@@ -734,7 +734,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     const resendBtn = document.getElementById('resendOtpBtn');
     resendBtn.disabled = true;
     try{
-      const res = await fetch('/api/request-referral-otp', {
+      const res = await fetch('/api/referral-lookup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: pendingCode })

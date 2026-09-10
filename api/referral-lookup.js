@@ -1,22 +1,45 @@
 const crypto = require('crypto');
 const { supabase } = require('./utils/supabaseClient');
+const { sendReferralOtpEmail } = require('./utils/brevo');
 
-// Public endpoint — step 2 of the OTP-gated /referral-status flow.
-// Knowing the referral code alone is no longer sufficient (it never
-// truly was "not guessable" — short codes, reused across channels);
-// now requires a valid, unexpired, unused OTP for that code, sent to
-// the email on file via request-referral-otp.js. Only a safe subset
-// of fields is returned per application/subscription — never email,
-// banking details, personal_info, or commission figures (commission
-// is admin-only, shown in /admin, not here).
+// Public endpoint, merged from request-referral-otp.js +
+// referral-lookup.js to stay under Vercel Hobby's serverless function
+// cap — adding request-referral-otp.js as a 10th function broke every
+// deployment (the build completes but fails during "Deploying
+// outputs", the same symptom hit earlier this session at 11
+// functions; Vercel's actual internal count doesn't reliably match
+// the literal file count, so merging is the safe fix rather than
+// trying to find the exact number that's actually safe).
 //
-// One code now covers both BGL account opening and Dangote IPO
-// subscriptions — this endpoint reports both.
+// Dispatches on whether `otp` is present in the body — no explicit
+// `action` field needed, since the two calls already have naturally
+// different shapes: {code} to request a code, {code, otp} to verify
+// one and get the lookup results.
+//
+// Step 1 (no otp): given a referral code, emails a 6-digit one-time
+// code to the email on file for it (never a self-claimed one — that's
+// what makes the gate meaningful). Step 2 (with otp): verifies it
+// (unexpired, unused, hash match, capped at 5 attempts, single-use)
+// then returns the same safe subset of fields as before — never
+// email, banking details, personal_info, or commission figures
+// (commission is admin-only, shown in /admin, not here). One code
+// covers both BGL account opening and Dangote IPO subscriptions.
 
+const OTP_TTL_MINUTES = 10;
+const OTP_COOLDOWN_SECONDS = 60;
 const MAX_OTP_ATTEMPTS = 5;
 
+function generateOtp() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
 function hashOtp(otp) {
   return crypto.createHash('sha256').update(otp).digest('hex');
+}
+function maskEmail(email) {
+  const [user, domain] = email.split('@');
+  if (!domain) return email;
+  const visible = user.slice(0, Math.min(2, user.length));
+  return `${visible}${'*'.repeat(Math.max(1, user.length - visible.length))}@${domain}`;
 }
 
 module.exports = async (req, res) => {
@@ -33,10 +56,72 @@ module.exports = async (req, res) => {
 
   const code = (body.code || '').trim().toUpperCase();
   const otp = (body.otp || '').trim();
-  if (!code || !otp) {
-    return res.status(400).json({ error: 'Please provide your referral code and verification code.' });
+
+  if (!code) {
+    return res.status(400).json({ error: 'Please provide a referral code.' });
   }
 
+  if (!otp) return requestOtp(res, code);
+  return verifyOtpAndLookup(res, code, otp);
+};
+
+async function requestOtp(res, code) {
+  try {
+    const { data: codeRow, error: codeErr } = await supabase
+      .from('referral_codes')
+      .select('code, agent_name, email')
+      .eq('code', code)
+      .maybeSingle();
+
+    if (codeErr) throw codeErr;
+    if (!codeRow) {
+      return res.status(404).json({ error: "We couldn't find that referral code." });
+    }
+    if (!codeRow.email) {
+      return res.status(403).json({ error: 'This code has no email on file yet — contact BGL to enable lookup for it.' });
+    }
+
+    // Cooldown: if a still-pending OTP was requested very recently for
+    // this code, don't send another — avoids spam-emailing the
+    // recipient if this endpoint gets hit repeatedly. Responds as if
+    // it succeeded either way, so this never leaks whether a request
+    // is being rate-limited vs freshly sent.
+    const { data: recent, error: recentErr } = await supabase
+      .from('referral_otp_codes')
+      .select('created_at')
+      .eq('code', code)
+      .is('used_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (recentErr) throw recentErr;
+
+    const withinCooldown = recent &&
+      (Date.now() - new Date(recent.created_at).getTime()) / 1000 < OTP_COOLDOWN_SECONDS;
+
+    if (!withinCooldown) {
+      const generatedOtp = generateOtp();
+      const { error: insertErr } = await supabase.from('referral_otp_codes').insert({
+        code,
+        otp_hash: hashOtp(generatedOtp),
+        expires_at: new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString()
+      });
+      if (insertErr) throw insertErr;
+
+      // OTP delivery IS the point of this step — unlike an internal
+      // alert, a failure here must be surfaced, not swallowed, since
+      // the person genuinely won't be able to proceed without it.
+      await sendReferralOtpEmail({ email: codeRow.email, agentName: codeRow.agent_name, otp: generatedOtp });
+    }
+
+    return res.status(200).json({ ok: true, maskedEmail: maskEmail(codeRow.email) });
+  } catch (err) {
+    console.error('referral-lookup (request-otp) error:', err);
+    return res.status(500).json({ error: 'Something went wrong sending your verification code. Please try again.' });
+  }
+}
+
+async function verifyOtpAndLookup(res, code, otp) {
   try {
     // ---- Verify the OTP first — nothing below runs without it ----
     const { data: otpRow, error: otpErr } = await supabase
@@ -121,7 +206,7 @@ module.exports = async (req, res) => {
       }))
     });
   } catch (err) {
-    console.error('referral-lookup error:', err);
+    console.error('referral-lookup (verify) error:', err);
     return res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
-};
+}
