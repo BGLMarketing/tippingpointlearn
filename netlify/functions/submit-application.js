@@ -24,6 +24,18 @@ exports.handler = async (event) => {
     return jsonResponse(400, { error: 'Malformed request body.' });
   }
 
+  // Lightweight duplicate-email check, dispatched from this same
+  // endpoint rather than a new one — Vercel Hobby's serverless
+  // function cap has already broken this project's deployment twice
+  // this session at just 10-11 functions (the api/ copy shares this
+  // endpoint's function count with that concern; Netlify has no such
+  // cap, but the two copies stay structurally identical regardless).
+  // {checkEmail: '...'} with no accountType is treated as "just check
+  // this", not a submission.
+  if (body.checkEmail && !body.accountType) {
+    return checkExistingCustomer(body.checkEmail);
+  }
+
   const { accountType, data, documents } = body;
 
   if (!['individual', 'joint', 'corporate'].includes(accountType)) {
@@ -225,4 +237,32 @@ async function generateUniqueReference() {
     if (!data) return candidate; // no collision
   }
   return `BGL-${datePart}-${Date.now().toString().slice(-6)}`;
+}
+
+async function checkExistingCustomer(email) {
+  const trimmed = (email || '').trim();
+  if (!trimmed) {
+    return jsonResponse(400, { error: 'Please provide an email to check.' });
+  }
+
+  try {
+    // Two sources of "already has a BGL account": the imported list
+    // of customers opened outside this system, and anyone who's
+    // already completed the wizard here (status = 'opened' — a
+    // pending/in-review application doesn't count as "having an
+    // account" yet, so this deliberately doesn't match those).
+    const [{ data: existingCustomer }, { data: openedApplication }] = await Promise.all([
+      supabase.from('existing_bgl_customers').select('id').ilike('email', trimmed).limit(1).maybeSingle(),
+      supabase.from('account_opening_applications').select('id').ilike('applicant_email', trimmed).eq('status', 'opened').limit(1).maybeSingle()
+    ]);
+
+    return jsonResponse(200, { exists: !!(existingCustomer || openedApplication) });
+  } catch (err) {
+    console.error('check-existing-customer error:', err);
+    // Fail open — if this lookup itself breaks, don't block a
+    // legitimate new applicant from submitting because of it. Worst
+    // case a genuine duplicate slips through and gets caught by
+    // admin during review instead of at the form.
+    return jsonResponse(200, { exists: false });
+  }
 }

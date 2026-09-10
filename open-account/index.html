@@ -952,11 +952,19 @@ function textareaField(prefix,key,label,required,span){
     <div class="err-msg">This field is required.</div>
   </div>`;
 }
-function emailField(prefix,key,label,required){
+function emailField(prefix,key,label,required,checkDuplicate){
+  // checkDuplicate opts this specific field into the "do you already
+  // have a BGL account" lookup on blur — only meaningful for the
+  // actual account-holder identity (individual/joint's primary
+  // applicant, corporate's company email), not every email field in
+  // the wizard (a joint partner or corporate signatory can
+  // legitimately already have their own separate personal account).
+  const fieldId = `${prefix}_${key}_field`;
   return `<div class="field">
     <label>${label}${required?'<span class="req">*</span>':''}</label>
-    <input type="email" data-field="${prefix}.${key}" ${required?'data-required="true"':''}>
+    <input type="email" data-field="${prefix}.${key}" ${required?'data-required="true"':''} ${checkDuplicate ? `id="${fieldId}" onblur="checkForExistingCustomer(this)" oninput="this.dataset.duplicateBlocked=''; document.getElementById('${fieldId}_warning').style.display='none';"` : ''}>
     <div class="err-msg">Enter a valid email address.</div>
+    ${checkDuplicate ? `<div class="dup-warning" id="${fieldId}_warning" style="display:none; margin-top:8px; padding:10px 12px; background:rgba(179,69,47,0.08); border:1px solid rgba(179,69,47,0.3); border-radius:8px; font-size:13px; color:#b3452f; line-height:1.5;"></div>` : ''}
   </div>`;
 }
 function telField(prefix,key,label,required){
@@ -1039,7 +1047,7 @@ function personalFields(prefix){
       ${textField(prefix,'lga','Local government',true)}
       ${textareaField(prefix,'residentialAddress','Residential address',true,'full')}
       ${textareaField(prefix,'permanentAddress','Permanent address',true,'full')}
-      ${emailField(prefix,'email','Email address',true)}
+      ${emailField(prefix,'email','Email address',true,prefix === 'primary')}
       ${telField(prefix,'phone','Phone number',true)}
     </div>
   </fieldset>`;
@@ -1316,7 +1324,7 @@ function companyStepHtml(){
       ${textareaField('company','businessAddress','Business address',true,'full')}
       ${textField('company','state','State',true)}
       ${textField('company','country','Country',true)}
-      ${emailField('company','email','Company email',true)}
+      ${emailField('company','email','Company email',true,true)}
       ${telField('company','phone','Company phone',true)}
       ${textField('company','natureOfBusiness','Nature of business',true)}
       ${selectField('company','sourceOfFunds','Source of funds',['Business income','Investments','Shareholder capital','Other'],true)}
@@ -1574,6 +1582,41 @@ function hydrateFields(){
   });
 }
 
+async function checkForExistingCustomer(input){
+  const email = input.value.trim();
+  const warningEl = document.getElementById(input.id + '_warning');
+  warningEl.style.display = 'none';
+  warningEl.textContent = '';
+  input.dataset.duplicateBlocked = '';
+
+  // Don't bother checking an empty or obviously-malformed address —
+  // the field's own required/format validation already covers that;
+  // this check is specifically about a real email that already has
+  // an account, not about whether it looks like an email at all.
+  if(!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+
+  try{
+    const res = await fetch('/api/submit-application', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ checkEmail: email })
+    });
+    const result = await res.json();
+    if(result && result.exists){
+      warningEl.textContent = 'This email already has a BGL account. Please contact clientservices@bglgroup.ng.';
+      warningEl.style.display = 'block';
+      input.dataset.duplicateBlocked = 'true';
+      const fieldWrap = input.closest('.field');
+      if(fieldWrap) fieldWrap.classList.add('invalid');
+      updateNextButtonState();
+    }
+  } catch(err){
+    // Fail silently on the frontend too, matching the backend's
+    // "fail open" reasoning — a broken check shouldn't block a
+    // legitimate applicant, it should just not warn them.
+  }
+}
+
 function collectStep(){
   let valid = true;
   document.querySelectorAll('[data-field]').forEach(el=>{
@@ -1598,7 +1641,17 @@ function collectStep(){
     const digits = el.dataset.digits;
     const formatOk = !digits || !val || new RegExp(`^\\d{${digits}}$`).test(val);
 
-    if((isRequired && empty) || (isVisible && !formatOk)){
+    // An email flagged by checkForExistingCustomer() as already
+    // belonging to a BGL account blocks progress the same way a
+    // malformed BVN does — it's never acceptable to proceed with,
+    // regardless of whether the field is otherwise "required". Only
+    // applies while the flagged value is still what's actually typed
+    // in the box — editing it after the fact clears the flag (see
+    // checkForExistingCustomer's oninput handler) rather than leaving
+    // a stale block on a since-corrected value.
+    const isDuplicateBlocked = el.dataset.duplicateBlocked === 'true';
+
+    if((isRequired && empty) || (isVisible && !formatOk) || (isVisible && isDuplicateBlocked)){
       valid = false;
       if(fieldWrap) fieldWrap.classList.add('invalid');
     } else if(fieldWrap){

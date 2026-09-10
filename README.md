@@ -103,6 +103,29 @@ other page, so it's a normal Netlify-served page like `/faq` or
   usable error body). Per-file cap is 5MB, 25MB combined per
   application — now just a sane UX/cost limit, not a hard platform
   constraint.
+- **Duplicate-account check**: the primary applicant's email
+  (individual/joint) and the company email (corporate) are checked
+  against existing BGL customers as soon as the field loses focus —
+  if a match is found, a warning appears ("This email already has a
+  BGL account. Please contact clientservices@bglgroup.ng.") and that
+  step can't be continued past until the email is changed. Checked
+  against two sources: `existing_bgl_customers` (accounts opened
+  outside this system, imported via `supabase/import_existing_customers.sql`
+  — run `supabase/migration_existing_customers.sql` first to create
+  the table) and any application already at `status = 'opened'` in
+  this system itself (a pending/in-review application doesn't count
+  as "having an account" yet, so those are deliberately not matched).
+  Not every email field in the wizard triggers this — a joint
+  partner or corporate signatory can legitimately already have their
+  own separate personal account, so only the actual account-holder
+  identity's email is checked. Implemented as a `{checkEmail: '...'}`
+  dispatch on `submit-application.js` rather than a new endpoint, to
+  stay under Vercel Hobby's serverless function cap (already broke
+  production twice this session at just 10-11 functions). The check
+  "fails open" on any error, both server- and client-side — a broken
+  lookup should never block a legitimate applicant from submitting,
+  worst case a genuine duplicate slips through and gets caught by
+  admin during review instead of at the form.
 - **Submission**: once all documents are uploaded, the form posts small
   JSON (form field values + the list of already-uploaded document
   paths — no file bytes) to `/.netlify/functions/submit-application`.

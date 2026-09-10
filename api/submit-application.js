@@ -22,6 +22,15 @@ module.exports = async (req, res) => {
     return res.status(400).json({ error: 'Malformed request body.' });
   }
 
+  // Lightweight duplicate-email check, dispatched from this same
+  // endpoint rather than a new one — Vercel Hobby's serverless
+  // function cap has already broken this project's deployment twice
+  // this session at just 10-11 functions. {checkEmail: '...'} with no
+  // accountType is treated as "just check this", not a submission.
+  if (body.checkEmail && !body.accountType) {
+    return checkExistingCustomer(res, body.checkEmail);
+  }
+
   const { accountType, data, documents } = body;
 
   if (!['individual', 'joint', 'corporate'].includes(accountType)) {
@@ -197,4 +206,32 @@ async function generateUniqueReference() {
     if (!data) return candidate;
   }
   return `BGL-${datePart}-${Date.now().toString().slice(-6)}`;
+}
+
+async function checkExistingCustomer(res, email) {
+  const trimmed = (email || '').trim();
+  if (!trimmed) {
+    return res.status(400).json({ error: 'Please provide an email to check.' });
+  }
+
+  try {
+    // Two sources of "already has a BGL account": the imported list
+    // of customers opened outside this system, and anyone who's
+    // already completed the wizard here (status = 'opened' — a
+    // pending/in-review application doesn't count as "having an
+    // account" yet, so this deliberately doesn't match those).
+    const [{ data: existingCustomer }, { data: openedApplication }] = await Promise.all([
+      supabase.from('existing_bgl_customers').select('id').ilike('email', trimmed).limit(1).maybeSingle(),
+      supabase.from('account_opening_applications').select('id').ilike('applicant_email', trimmed).eq('status', 'opened').limit(1).maybeSingle()
+    ]);
+
+    return res.status(200).json({ exists: !!(existingCustomer || openedApplication) });
+  } catch (err) {
+    console.error('check-existing-customer error:', err);
+    // Fail open — if this lookup itself breaks, don't block a
+    // legitimate new applicant from submitting because of it. Worst
+    // case a genuine duplicate slips through and gets caught by
+    // admin during review instead of at the form.
+    return res.status(200).json({ exists: false });
+  }
 }
