@@ -126,6 +126,20 @@ other page, so it's a normal Netlify-served page like `/faq` or
   lookup should never block a legitimate applicant from submitting,
   worst case a genuine duplicate slips through and gets caught by
   admin during review instead of at the form.
+- **Referral attribution — matches code or name**: `referred_by` is
+  free text an applicant typed on the wizard, and not every applicant
+  types the actual code — some type the referrer's name instead. Both
+  the public `/referral-status` lookup (`referral-lookup.js`) and
+  admin's per-code commission calculation now match on **either** the
+  code or the referral code's `agent_name` (case-insensitive, via two
+  separate queries merged and deduplicated by reference — not a single
+  combined `.or()` filter, which is fragile against special characters
+  a name could contain). Admin can also directly edit a specific
+  application's `referred_by` value from its detail view ("Edit" next
+  to the field) for anything that doesn't cleanly match either — a
+  reason of at least 10 characters is required and both the old and
+  new values are logged to `application_status_history`, same as
+  every other change to an application.
 - **Submission**: once all documents are uploaded, the form posts small
   JSON (form field values + the list of already-uploaded document
   paths — no file bytes) to `/.netlify/functions/submit-application`.

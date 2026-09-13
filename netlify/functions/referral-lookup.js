@@ -164,31 +164,39 @@ async function verifyOtpAndLookup(code, otp) {
       return jsonResponse(404, { error: "We couldn't find that referral code." });
     }
 
-    // referred_by is free text an applicant typed on a wizard, not
-    // guaranteed to match the stored (always-uppercase) code's exact
-    // case — match case-insensitively.
-    const { data: applications, error: appsErr } = await supabase
-      .from('account_opening_applications')
-      .select('application_reference, applicant_name, account_type, status, submitted_at, opened_at, chn')
-      .ilike('referred_by', code)
-      .order('submitted_at', { ascending: false });
-    if (appsErr) throw appsErr;
+    // referred_by is free text an applicant typed on a wizard — not
+    // guaranteed to match the code's exact case (handled by ilike),
+    // and not guaranteed to be the code at all: some applicants type
+    // the referrer's name instead of their code. Matching on both
+    // (case-insensitive, run as two separate queries and merged
+    // rather than one combined .or() filter, since PostgREST's .or()
+    // string syntax is fragile against special characters that could
+    // appear in a name) means a name-only entry still gets correctly
+    // attributed rather than silently falling through the cracks.
+    const applications = await matchByCodeOrName(
+      'account_opening_applications',
+      'application_reference, applicant_name, account_type, status, submitted_at, opened_at, chn, referred_by',
+      'submitted_at',
+      code,
+      codeRow.agent_name
+    );
 
-    const { data: subscriptions, error: subsErr } = await supabase
-      .from('ipo_subscriptions')
-      .select('subscription_reference, applicant_name, investor_type, status, submitted_at')
-      .ilike('referred_by', code)
-      .order('submitted_at', { ascending: false });
-    if (subsErr) throw subsErr;
+    const subscriptions = await matchByCodeOrName(
+      'ipo_subscriptions',
+      'subscription_reference, applicant_name, investor_type, status, submitted_at, referred_by',
+      'submitted_at',
+      code,
+      codeRow.agent_name
+    );
 
-    const accountsOpened = (applications || []).filter(a => a.status === 'opened').length;
+    const accountsOpened = applications.filter(a => a.status === 'opened').length;
 
     return jsonResponse(200, {
       agentName: codeRow.agent_name,
       code: codeRow.code,
       accountsOpened,
-      ipoSubscribers: (subscriptions || []).length,
-      applications: (applications || []).map(a => ({
+      ipoSubscribers: subscriptions.length,
+      applications: applications.map(a => ({
         reference: a.application_reference,
         applicantName: a.applicant_name,
         accountType: a.account_type,
@@ -197,7 +205,7 @@ async function verifyOtpAndLookup(code, otp) {
         openedAt: a.opened_at,
         chn: a.chn
       })),
-      subscriptions: (subscriptions || []).map(s => ({
+      subscriptions: subscriptions.map(s => ({
         reference: s.subscription_reference,
         applicantName: s.applicant_name,
         investorType: s.investor_type,
@@ -209,6 +217,38 @@ async function verifyOtpAndLookup(code, otp) {
     console.error('referral-lookup (verify) error:', err);
     return jsonResponse(500, { error: 'Something went wrong. Please try again.' });
   }
+}
+
+// Matches rows whose referred_by is either the code itself or the
+// referrer's own agent_name (case-insensitive either way), merged and
+// deduplicated by reference column, newest first. Two queries rather
+// than a single combined filter — safer against special characters
+// in a name (commas, parentheses) that could otherwise break
+// PostgREST's .or() filter string syntax.
+async function matchByCodeOrName(table, selectCols, dateCol, code, agentName) {
+  const refCol = table === 'account_opening_applications' ? 'application_reference' : 'subscription_reference';
+
+  const queries = [
+    supabase.from(table).select(selectCols).ilike('referred_by', code)
+  ];
+  if (agentName && agentName.trim()) {
+    queries.push(supabase.from(table).select(selectCols).ilike('referred_by', agentName.trim()));
+  }
+
+  const results = await Promise.all(queries);
+  for (const r of results) if (r.error) throw r.error;
+
+  const seen = new Set();
+  const merged = [];
+  for (const r of results) {
+    for (const row of (r.data || [])) {
+      if (seen.has(row[refCol])) continue;
+      seen.add(row[refCol]);
+      merged.push(row);
+    }
+  }
+  merged.sort((a, b) => new Date(b[dateCol]) - new Date(a[dateCol]));
+  return merged;
 }
 
 function jsonResponse(statusCode, body) {

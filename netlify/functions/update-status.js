@@ -52,9 +52,59 @@ exports.handler = async (event) => {
   }
 
   if (body.domain === 'ipo') return handleIpoStatus(adminEmail, body);
-  if (body.domain === 'account') return handleApplicationStatus(adminEmail, body);
+  if (body.domain === 'account') {
+    if (body.action === 'edit_referred_by') return handleEditReferredBy(adminEmail, body);
+    return handleApplicationStatus(adminEmail, body);
+  }
   return jsonResponse(400, { error: "domain must be 'account' or 'ipo'." });
 };
+
+async function handleEditReferredBy(adminEmail, body) {
+  const { applicationId, referredBy, reason } = body;
+
+  if (!applicationId) {
+    return jsonResponse(400, { error: 'applicationId is required.' });
+  }
+  if (!reason || reason.trim().length < 10) {
+    return jsonResponse(400, { error: 'A reason of at least 10 characters is required to edit this field.' });
+  }
+
+  try {
+    const { data: appRow, error: fetchErr } = await supabase
+      .from('account_opening_applications')
+      .select('id, referred_by')
+      .eq('id', applicationId)
+      .single();
+    if (fetchErr || !appRow) {
+      return jsonResponse(404, { error: 'Application not found.' });
+    }
+
+    const oldValue = appRow.referred_by;
+    const newValue = (referredBy || '').trim() || null;
+
+    const { error: updateErr } = await supabase
+      .from('account_opening_applications')
+      .update({ referred_by: newValue })
+      .eq('id', applicationId);
+    if (updateErr) throw updateErr;
+
+    // Not a status transition, but application_status_history has no
+    // constraint tying it to the status CHECK list — reusing it here
+    // keeps every change to an application in one place admin already
+    // looks at, rather than a separate audit log nobody checks.
+    await supabase.from('application_status_history').insert({
+      application_id: applicationId,
+      status: 'referred_by_updated',
+      changed_by: adminEmail,
+      reason: `Changed from "${oldValue || '(none)'}" to "${newValue || '(none)'}" — ${reason.trim()}`
+    });
+
+    return jsonResponse(200, { ok: true, referredBy: newValue });
+  } catch (err) {
+    console.error('update-status (edit referred_by) error:', err);
+    return jsonResponse(500, { error: 'Something went wrong updating the referral field. Please try again.' });
+  }
+}
 
 async function handleApplicationStatus(adminEmail, body) {
   const { applicationId, newStatus, chn, cscAccountNumber, adminNote, rejectionReason } = body;

@@ -970,6 +970,26 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   </div>
 </div>
 
+<!-- ===== Edit "Referred by" modal ===== -->
+<div class="modal-overlay" id="editReferredByModalOverlay" onclick="if(event.target===this) closeEditReferredByModal()">
+  <div class="modal" role="dialog" aria-modal="true">
+    <button class="modal-close" onclick="closeEditReferredByModal()" aria-label="Close">✕</button>
+    <div class="eyebrow">Edit referral</div>
+    <h3>Edit "Referred by"</h3>
+    <p class="sub">Use this when an applicant typed something that doesn't match any code exactly — e.g. a referrer's name instead of their code. A reason is required and kept in the application's history.</p>
+    <div class="field">
+      <label for="edit-referred-by-value">Referred by</label>
+      <input type="text" id="edit-referred-by-value">
+    </div>
+    <div class="field">
+      <label for="edit-referred-by-reason">Reason for this change</label>
+      <textarea id="edit-referred-by-reason" style="min-height:70px;"></textarea>
+    </div>
+    <button class="btn btn-primary" style="width:100%; padding:13px;" onclick="confirmEditReferredBy()">Save</button>
+    <div class="form-status" id="edit-referred-by-modal-status"></div>
+  </div>
+</div>
+
 <!-- ===== Payment unconfirmed modal (IPO) ===== -->
 <div class="modal-overlay" id="ipoUnconfirmedModalOverlay" onclick="if(event.target===this) closeIpoUnconfirmedModal()">
   <div class="modal" role="dialog" aria-modal="true">
@@ -1559,7 +1579,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           <div class="detail-actions">${actions}</div>
         </div>
         ${detailRow('Account type', capitalize(app.account_type))}
-        ${detailRow('Referred by', app.referred_by)}
+        <div class="detail-row"><span>Referred by</span><span>${escapeHtml(app.referred_by || '—')} <button class="link-btn" style="font-size:11px;" onclick="openEditReferredByModal('${app.id}', '${escapeHtml(app.referred_by || '')}')">Edit</button></span></div>
         ${app.referred_by ? detailRow("Referrer's email", referrerEmail) : ''}
         ${detailRow('Submitted', new Date(app.submitted_at).toLocaleString())}
         ${app.chn ? detailRow('CHN', app.chn) : ''}
@@ -1745,6 +1765,35 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     try{
       await callStatusUpdate({ applicationId: currentApplication.id, newStatus: 'rejected', rejectionReason });
       closeRejectModal();
+      await viewApplication(currentApplication.id);
+    } catch(err){
+      statusEl.textContent = err.message;
+      statusEl.className = 'form-status error';
+    }
+  };
+
+  window.openEditReferredByModal = function(id, currentValue){
+    currentApplication = { id };
+    document.getElementById('edit-referred-by-value').value = currentValue || '';
+    document.getElementById('edit-referred-by-reason').value = '';
+    document.getElementById('edit-referred-by-modal-status').textContent = '';
+    document.getElementById('editReferredByModalOverlay').classList.add('open');
+  };
+  window.closeEditReferredByModal = function(){
+    document.getElementById('editReferredByModalOverlay').classList.remove('open');
+  };
+  window.confirmEditReferredBy = async function(){
+    const referredBy = document.getElementById('edit-referred-by-value').value.trim();
+    const reason = document.getElementById('edit-referred-by-reason').value.trim();
+    const statusEl = document.getElementById('edit-referred-by-modal-status');
+    if(reason.length < 10){
+      statusEl.textContent = 'Please provide a reason of at least 10 characters.';
+      statusEl.className = 'form-status error';
+      return;
+    }
+    try{
+      await callStatusUpdate({ action: 'edit_referred_by', applicationId: currentApplication.id, referredBy, reason });
+      closeEditReferredByModal();
       await viewApplication(currentApplication.id);
     } catch(err){
       statusEl.textContent = err.message;
@@ -2097,26 +2146,44 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       return;
     }
 
-    // Two queries per code (accounts + IPO subscriptions) — fine at
-    // this scale (a handful of agents). ilike matches case-
-    // insensitively, same as the public /referral-status lookup,
-    // since applicants type the code as free text.
-    const [accountRows, ipoRows] = await Promise.all([
+    // Two match strategies per code per table (code match + agent-name
+    // match, since some applicants type the referrer's name instead
+    // of their code), merged and deduplicated by reference — same
+    // approach as the public /referral-status lookup. Four queries
+    // per code total; fine at this scale (a handful of agents).
+    const [accountsByCode, accountsByName, ipoByCode, ipoByName] = await Promise.all([
       Promise.all(codes.map(c =>
-        sb.from('account_opening_applications').select('status').ilike('referred_by', c.code)
+        sb.from('account_opening_applications').select('application_reference, status').ilike('referred_by', c.code)
       )),
       Promise.all(codes.map(c =>
-        sb.from('ipo_subscriptions').select('status, amount_payable').ilike('referred_by', c.code)
+        c.agent_name ? sb.from('account_opening_applications').select('application_reference, status').ilike('referred_by', c.agent_name) : Promise.resolve({ data: [] })
+      )),
+      Promise.all(codes.map(c =>
+        sb.from('ipo_subscriptions').select('subscription_reference, status, amount_payable').ilike('referred_by', c.code)
+      )),
+      Promise.all(codes.map(c =>
+        c.agent_name ? sb.from('ipo_subscriptions').select('subscription_reference, status, amount_payable').ilike('referred_by', c.agent_name) : Promise.resolve({ data: [] })
       ))
     ]);
+
+    function dedupeByRef(rowsA, rowsB, refKey){
+      const seen = new Set();
+      const merged = [];
+      for(const row of [...(rowsA||[]), ...(rowsB||[])]){
+        if(seen.has(row[refKey])) continue;
+        seen.add(row[refKey]);
+        merged.push(row);
+      }
+      return merged;
+    }
 
     let totalCommission = 0;
 
     tbody.innerHTML = codes.map((c, i) => {
-      const accounts = accountRows[i].data || [];
+      const accounts = dedupeByRef(accountsByCode[i].data, accountsByName[i].data, 'application_reference');
       const accountsOpened = accounts.filter(a => a.status === 'opened').length;
 
-      const subs = ipoRows[i].data || [];
+      const subs = dedupeByRef(ipoByCode[i].data, ipoByName[i].data, 'subscription_reference');
       const ipoSubscribers = subs.length;
       const paidAmount = subs
         .filter(s => IPO_PAID_STATUSES.includes(s.status))
