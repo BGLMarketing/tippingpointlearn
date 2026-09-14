@@ -1389,6 +1389,203 @@ function jointPartnerStepHtml(){
   </fieldset>`;
 }
 
+/* ---------- minor account type ---------- */
+// Built from BGL's Minors KYC form. Four things the adult account
+// types don't have: the minor's own (much shorter) details, a
+// guardian who stands in for signing/indemnity, the guardian's
+// employment/financial position, and a next-of-kin for the guardian.
+// No PEP step for minors -- the source form doesn't ask for one.
+
+function minorFields(){
+  return `<h2 class="aow-step-title">Minor's details</h2>
+  <p class="aow-step-sub">Details of the minor this account is being opened for.</p>
+  <fieldset>
+    <legend>About the minor</legend>
+    <div class="aow-grid">
+      ${selectField('minor','sex','Sex',['Male','Female'],true)}
+      ${selectField('minor','title','Title',['Mr','Miss'],true)}
+      ${textField('minor','surname','Surname',true)}
+      ${textField('minor','otherNames','Other names',true)}
+      ${dateField('minor','dob','Date of birth',true)}
+      ${textField('minor','nationality','Nationality',true)}
+      ${textField('minor','stateOfOrigin','State of origin',true)}
+      ${textField('minor','lga','Local government',true)}
+    </div>
+  </fieldset>`;
+}
+
+function guardianFields(){
+  return `<h2 class="aow-step-title">Guardian's details</h2>
+  <p class="aow-step-sub">The adult responsible for this account on the minor's behalf.</p>
+  <fieldset>
+    <legend>About the guardian</legend>
+    <div class="aow-grid">
+      ${selectField('guardian','sex','Sex',['Male','Female'],true)}
+      ${selectField('guardian','title','Title',['Mr','Miss','Mrs'],true)}
+    </div>
+    ${textField('guardian','name','Full name',true,'full')}
+    ${textField('guardian','maidenName','Maiden name (where applicable)',false,'full')}
+    <div class="aow-grid">
+      ${selectField('guardian','idType','ID type',['International passport','Driver\\u2019s licence','National ID','Other'],true)}
+      ${textField('guardian','idNumber','ID number',true)}
+      ${dateField('guardian','idExpiry','ID expiry date',true)}
+      ${dateField('guardian','dob','Date of birth',true)}
+      ${telField('guardian','phone','Phone number',true)}
+      ${textField('guardian','nationality','Nationality',true)}
+    </div>
+    ${textField('guardian','stateOriginLga','State of origin / LGA',true,'full')}
+    ${textareaField('guardian','postalAddress','Postal address',true,'full')}
+    ${textareaField('guardian','residentialAddress','Residential address',true,'full')}
+    <div class="aow-grid">
+      ${emailField('guardian','email','Email address',true)}
+      ${textField('guardian','taxNumber','Tax number (optional)',false)}
+    </div>
+  </fieldset>`;
+}
+
+function guardianEmploymentFields(){
+  return `<h2 class="aow-step-title">Employment status &amp; financial position</h2>
+  <p class="aow-step-sub">About the guardian's employment.</p>
+  <fieldset>
+    <legend>Employment status</legend>
+    <div class="field" data-radio-group="guardian.employmentStatus">
+      <label>Employment status<span class="req">*</span></label>
+      <div class="radio-row">
+        <label class="radio-opt"><input type="radio" name="guardian_employmentStatus" value="Employed" data-field-radio="guardian.employmentStatus"> Employed</label>
+        <label class="radio-opt"><input type="radio" name="guardian_employmentStatus" value="Self-Employed" data-field-radio="guardian.employmentStatus"> Self-Employed</label>
+        <label class="radio-opt"><input type="radio" name="guardian_employmentStatus" value="Student" data-field-radio="guardian.employmentStatus"> Student</label>
+        <label class="radio-opt"><input type="radio" name="guardian_employmentStatus" value="Retired" data-field-radio="guardian.employmentStatus"> Retired</label>
+        <label class="radio-opt"><input type="radio" name="guardian_employmentStatus" value="Not Working" data-field-radio="guardian.employmentStatus"> Not Working</label>
+      </div>
+    </div>
+    ${textField('guardian','employerName',"Employer's name (if applicable)",false,'full')}
+    ${textareaField('guardian','employerAddress',"Employer's address",false,'full')}
+    ${textField('guardian','natureOfBusiness','Nature of business',false,'full')}
+  </fieldset>
+  <fieldset>
+    <legend>Estimated annual income</legend>
+    <div class="field" data-radio-group="guardian.annualIncome">
+      <label>Total estimated annual income in Naira<span class="req">*</span></label>
+      <div class="radio-row">
+        <label class="radio-opt"><input type="radio" name="guardian_annualIncome" value="Less than N500,000" data-field-radio="guardian.annualIncome"> Less than N500,000</label>
+        <label class="radio-opt"><input type="radio" name="guardian_annualIncome" value="Between N500,000 & N1M" data-field-radio="guardian.annualIncome"> Between N500,000 &amp; N1M</label>
+        <label class="radio-opt"><input type="radio" name="guardian_annualIncome" value="Between N1M & N5M" data-field-radio="guardian.annualIncome"> Between N1M &amp; N5M</label>
+        <label class="radio-opt"><input type="radio" name="guardian_annualIncome" value="More than N5M" data-field-radio="guardian.annualIncome"> More than N5M</label>
+      </div>
+    </div>
+  </fieldset>`;
+}
+
+function nextOfKinFields(){
+  return `<h2 class="aow-step-title">Next of kin</h2>
+  <p class="aow-step-sub">For the guardian.</p>
+  <fieldset>
+    <legend>Next of kin details</legend>
+    ${textField('nextOfKin','name','Name',true,'full')}
+    <div class="aow-grid">
+      ${dateField('nextOfKin','dob','Date of birth',true)}
+      ${textField('nextOfKin','nationality','Nationality',true)}
+      ${selectField('nextOfKin','gender','Gender',['Male','Female'],true)}
+      ${textField('nextOfKin','relationship','Relationship',true)}
+      ${telField('nextOfKin','phone','Phone number',true)}
+    </div>
+    ${textareaField('nextOfKin','contactAddress','Contact address',true,'full')}
+    ${emailField('nextOfKin','email','Email address',false)}
+  </fieldset>`;
+}
+
+function minorBankingStepHtml(){
+  return `<h2 class="aow-step-title">Banking &amp; settlement</h2>
+  <fieldset>
+    <legend>Bank account</legend>
+    ${bankNameField('banking')}
+    ${textField('banking','accountName','Account name',true)}
+    ${digitField('banking','accountNumber','Account number',10,true)}
+    ${digitField('banking','bvn','BVN',11,true)}
+    <div class="aow-grid">
+      ${textField('banking','bankBranch','Bank branch',false)}
+      ${textareaField('banking','bankAddress','Bank address',false,'full')}
+    </div>
+  </fieldset>
+  <fieldset>
+    <legend>Sales proceed mode of payment</legend>
+    <div class="field" data-radio-group="banking.settlementMode">
+      <label>Settlement mode<span class="req">*</span></label>
+      <div class="radio-row">
+        <label class="radio-opt"><input type="radio" name="banking_settlementMode" value="CSCS Direct Settlement" data-field-radio="banking.settlementMode"> CSCS Direct Settlement</label>
+        <label class="radio-opt"><input type="radio" name="banking_settlementMode" value="In-House Settlement" data-field-radio="banking.settlementMode"> In-House Settlement</label>
+      </div>
+    </div>
+    <div class="aow-grid">
+      ${textField('banking','cscsNumber','CSCS number',false)}
+      ${textField('banking','chNumber','CH number',false)}
+    </div>
+  </fieldset>
+  <fieldset>
+    <legend>Mode of communication</legend>
+    <div class="field">
+      <label>How should we reach you? (select all that apply)</label>
+      <div class="radio-row">
+        <label class="radio-opt"><input type="checkbox" data-field="banking.commPhoneCall"> Phone call</label>
+        <label class="radio-opt"><input type="checkbox" data-field="banking.commTextMessage"> Text message</label>
+        <label class="radio-opt"><input type="checkbox" data-field="banking.commEmail"> Email</label>
+      </div>
+    </div>
+  </fieldset>`;
+}
+
+function minorDocumentsStepHtml(){
+  return `<h2 class="aow-step-title">Documents</h2>
+  <p class="aow-step-sub">Requirements per BGL's Minors KYC form. Each file must be under 5MB (PNG, JPG, or PDF).</p>
+  <p style="font-weight:600;font-size:13px;color:rgba(22,36,26,0.6);margin:0 0 8px;">Minor</p>
+  ${uploadField('minor','passportPhoto',"Minor's passport photograph",'Passport-style photo of the minor')}
+  ${uploadField('minor','birthCertificate','Birth certificate',"Evidencing the guardian's relationship to the minor")}
+  <p style="font-weight:600;font-size:13px;color:rgba(22,36,26,0.6);margin:24px 0 8px;">Guardian</p>
+  ${uploadField('guardian','passportPhoto',"Guardian's passport photograph",'Passport-style photo of the guardian')}
+  ${uploadField('guardian','validId','Valid ID',"Driver's licence, voter's card, international passport, or National ID card")}
+  ${uploadField('guardian','proofOfAddress','Proof of address','A recent utility bill, LAWMA bill, Land Use Charge, or lease agreement')}
+  ${uploadField('guardian','signature','Signature','A clear photo or scan of the signature')}`;
+}
+
+function minorDeclarationFields(){
+  return `<fieldset>
+    <legend>Declaration</legend>
+    <p style="font-size:13px; color:rgba(22,36,26,0.65); line-height:1.6; margin-bottom:16px;">
+      I confirm that all information given in this application is true, and that accounts must be adequately funded — any debit balance must be cleared within 3 days of its occurrence, attracting interest at two and a half times the prevailing treasury bill rate (or 22%, whichever is higher) if not cleared, and BGL Securities reserves the right to sell from the portfolio to clear an uncleared debit balance and accrued interest after 14 days.
+    </p>
+  </fieldset>
+  <fieldset>
+    <legend>Indemnity</legend>
+    <div class="info-box">
+      I/We indemnify and hold BGL Securities Limited harmless against all and any risks, proceedings, suits, costs, damages and claims,
+      expenses, legal fees, liabilities and losses which BGL Securities Limited may become exposed to, suffer from, subjected to, incurred
+      or made against whether arising out of or in connection with the sales or purchase of stocks which could arise as a result of, but not
+      limited to fluctuations in market price, internet or mobile network transmission, mutilated, duplicated, illegible and altered
+      letter/mandate form, provision of incorrect bank details, delay in remittance of sales proceeds for any reason, late receipt of
+      mandates, errors from reliance on the information provided on the account opening document or module, signature specimen, and other
+      events of force majeure and other unforeseen natural events such as but not limited to fire, flood, war, riot urban unrest, terrorism,
+      epidemic and pandemic on my/our behalf.
+    </div>
+    <label class="check-row">
+      <input type="checkbox" data-field="guardian.indemnityAccepted" data-required="true">
+      I have read and agree to the indemnity terms above.
+    </label>
+  </fieldset>
+  <fieldset>
+    <legend>Risk disclosure</legend>
+    <p style="font-size:13.5px; color:rgba(22,36,26,0.65); margin:0 0 12px; line-height:1.55;">
+      Before proceeding, please read the
+      <a href="${RISK_DISCLOSURE_URL}" target="_blank" rel="noopener">Risk Disclosure Statement</a>,
+      which sets out the risks involved in securities trading.
+    </p>
+    <label class="check-row">
+      <input type="checkbox" data-field="guardian.riskDisclosureAccepted" data-required="true"
+        onchange="recordConsentTimestamp('guardian','riskDisclosureAcceptedAt', this.checked)">
+      I have read and understood the Risk Disclosure Statement and accept the risks described in it.
+    </label>
+  </fieldset>`;
+}
+
 /* ---------- review ---------- */
 function reviewStepHtml(){
   const f = state;
@@ -1427,12 +1624,41 @@ function reviewStepHtml(){
       </div>`;
     }
   }
+  if(f.accountType === 'minor'){
+    const minor = f.minor || {};
+    const guardian = f.guardian || {};
+    const nok = f.nextOfKin || {};
+    html += `<div class="review-group"><h4>Minor <span class="edit-link" onclick="jumpToStep(1)">Edit</span></h4>
+      ${reviewRow('Name', [minor.title, minor.surname, minor.otherNames].filter(Boolean).join(' '))}
+      ${reviewRow('Sex', minor.sex)}
+      ${reviewRow('Date of birth', minor.dob)}
+      ${reviewRow('Nationality', minor.nationality)}
+      ${reviewRow('State of origin / LGA', [minor.stateOfOrigin, minor.lga].filter(Boolean).join(' / '))}
+    </div>`;
+    html += `<div class="review-group"><h4>Guardian <span class="edit-link" onclick="jumpToStep(2)">Edit</span></h4>
+      ${reviewRow('Name', guardian.name)}
+      ${reviewRow('Email', guardian.email)}
+      ${reviewRow('Phone', guardian.phone)}
+      ${reviewRow('ID type / number', [guardian.idType, guardian.idNumber].filter(Boolean).join(' / '))}
+      ${reviewRow('Residential address', guardian.residentialAddress)}
+      ${reviewRow('Employment status', guardian.employmentStatus)}
+      ${reviewRow('Estimated annual income', guardian.annualIncome)}
+      ${reviewRow('Indemnity accepted', guardian.indemnityAccepted ? 'Yes' : 'No')}
+      ${reviewRow('Risk disclosure accepted', guardian.riskDisclosureAccepted ? 'Yes, ' + new Date(guardian.riskDisclosureAcceptedAt).toLocaleString() : 'No')}
+    </div>`;
+    html += `<div class="review-group"><h4>Next of kin <span class="edit-link" onclick="jumpToStep(4)">Edit</span></h4>
+      ${reviewRow('Name', nok.name)}
+      ${reviewRow('Relationship', nok.relationship)}
+      ${reviewRow('Phone', nok.phone)}
+    </div>`;
+  }
 
   html += `<div class="review-group"><h4>Banking <span class="edit-link" onclick="jumpToStep(getBankingStepIndex())">Edit</span></h4>
     ${reviewRow('Bank', f.banking.bankName)}
     ${reviewRow('Account number', f.banking.accountNumber)}
-    ${reviewRow('Account type', f.banking.accountType)}
-    ${reviewRow('Direct settlement', f.banking.directSettlement)}
+    ${f.accountType === 'minor'
+      ? reviewRow('Settlement mode', f.banking.settlementMode) + reviewRow('CSCS / CH number', [f.banking.cscsNumber, f.banking.chNumber].filter(Boolean).join(' / '))
+      : reviewRow('Account type', f.banking.accountType) + reviewRow('Direct settlement', f.banking.directSettlement)}
   </div>`;
 
   const fileCount = Object.values(state.files).reduce((sum,group)=> sum + Object.keys(group).length, 0);
@@ -1467,7 +1693,8 @@ function typeStepHtml(){
   const types = [
     {id:'individual', title:'Individual', desc:'For investors opening an account in their own name.'},
     {id:'joint', title:'Joint', desc:'For two individuals opening an account together.'},
-    {id:'corporate', title:'Corporate', desc:'For businesses, companies and other corporate entities.'}
+    {id:'corporate', title:'Corporate', desc:'For businesses, companies and other corporate entities.'},
+    {id:'minor', title:'Minor', desc:'For an account opened on behalf of a minor, by their guardian.'}
   ];
   return `<h2 class="aow-step-title">Choose account type</h2>
   <p class="aow-step-sub">This determines the information we'll ask for next.</p>
@@ -1509,6 +1736,14 @@ function buildSteps(type){
       (hasSig2 ? `<p style="font-weight:600;font-size:13px;color:rgba(22,36,26,0.6);margin:24px 0 8px;">Signatory 2</p>` + documentFields('signatory2') : '') +
       corporateDocsStepHtml();
     } });
+  } else if(type === 'minor'){
+    s.push({id:'minor', title:"Minor's details", render: ()=>minorFields() + referralField('account') });
+    s.push({id:'guardian', title:"Guardian's details", render: guardianFields });
+    s.push({id:'employment', title:'Employment & income', render: guardianEmploymentFields });
+    s.push({id:'nextOfKin', title:'Next of kin', render: nextOfKinFields });
+    s.push({id:'banking', title:'Banking & settlement', render: minorBankingStepHtml });
+    s.push({id:'declaration', title:'Declaration', render: minorDeclarationFields });
+    s.push({id:'docs', title:'Documents', render: minorDocumentsStepHtml });
   }
   s.push({id:'review', title:'Review & submit', render: reviewStepHtml });
   return s;

@@ -33,7 +33,7 @@ module.exports = async (req, res) => {
 
   const { accountType, data, documents } = body;
 
-  if (!['individual', 'joint', 'corporate'].includes(accountType)) {
+  if (!['individual', 'joint', 'corporate', 'minor'].includes(accountType)) {
     return res.status(400).json({ error: 'A valid accountType is required.' });
   }
 
@@ -51,6 +51,7 @@ module.exports = async (req, res) => {
         status: 'submitted',
         referred_by: data?.account?.referredBy || null,
         banking_details: data?.banking || {},
+        next_of_kin_info: accountType === 'minor' ? (data?.nextOfKin || {}) : {},
         applicant_name: applicantName,
         applicant_email: applicantEmail
       })
@@ -77,6 +78,17 @@ module.exports = async (req, res) => {
       if (data?.signatory2 && data.signatory2.hasSecondSignatory === 'Yes') {
         applicantRows.push(buildApplicantRow(applicationId, 'signatory_2', data.signatory2));
       }
+    }
+    if (accountType === 'minor') {
+      // The minor's own row has no PEP/indemnity/risk-disclosure
+      // acceptance — buildApplicantRow() still works fine for them,
+      // since those fields are just absent from data.minor and end
+      // up correctly false/empty rather than needing special-casing.
+      // The guardian's row is where the real indemnity/risk-
+      // disclosure acceptance lives (they're the one signing), plus
+      // their employment/financial fields folded into personal_info.
+      applicantRows.push(buildApplicantRow(applicationId, 'minor', data?.minor));
+      applicantRows.push(buildApplicantRow(applicationId, 'guardian', data?.guardian));
     }
     if (applicantRows.length) {
       tasks.push(
@@ -180,6 +192,17 @@ function resolveApplicantIdentity(accountType, data) {
     return {
       applicantName: company.companyName || null,
       applicantEmail: company.email || sig1.email || null
+    };
+  }
+  if (accountType === 'minor') {
+    const minor = data.minor || {};
+    const guardian = data.guardian || {};
+    const name = [minor.title, minor.surname, minor.otherNames].filter(Boolean).join(' ');
+    return {
+      applicantName: name || null,
+      // The minor has no email of their own — the guardian is who we
+      // actually communicate with (confirmation, status updates).
+      applicantEmail: guardian.email || null
     };
   }
   const primary = data.primary || {};

@@ -1537,63 +1537,113 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     const byRole = {};
     (applicants || []).forEach(a => { byRole[a.applicant_role] = a; });
 
-    const roleLabels = { primary: 'Primary account holder', joint_partner: 'Joint account partner', signatory_1: 'Authorised signatory 1', signatory_2: 'Authorised signatory 2' };
+    const roleLabels = { primary: 'Primary account holder', joint_partner: 'Joint account partner', signatory_1: 'Authorised signatory 1', signatory_2: 'Authorised signatory 2', minor: 'Minor', guardian: 'Guardian' };
 
     let applicantsHtml = '';
     Object.entries(byRole).forEach(([role, a]) => {
       const info = a.personal_info || {};
       const pep = a.pep_info || {};
-      const isJointPartner = a.applicant_role === 'joint_partner';
-      const name = isJointPartner
+      const roleType = a.applicant_role;
+      const isJointPartner = roleType === 'joint_partner';
+      const isMinor = roleType === 'minor';
+      const isGuardian = roleType === 'guardian';
+
+      const name = (isJointPartner || isGuardian)
         ? (info.name || '—')
         : [info.title, info.surname, info.otherNames].filter(Boolean).join(' ') || '—';
 
-      // Joint partner's form collects a genuinely different field set
-      // (ID type/number/expiry, relationship, a single combined
-      // address) rather than the personal-details set every other
-      // role uses (gender, DOB, mother's maiden name, nationality,
-      // separate state-of-origin/LGA, separate residential/permanent
-      // address) — so this branches rather than trying to force one
-      // shared template over both shapes.
-      const roleSpecificRows = isJointPartner
-        ? detailRow('Relationship to primary holder', info.relationship)
-        + detailRow('ID type', info.idType)
-        + detailRow('ID number', info.idNumber)
-        + detailRow('ID expiry', info.idExpiry)
-        + detailRow('Date of birth', info.dob)
-        + detailRow('Alternate phone', info.altPhone)
-        + detailRow('State of origin / LGA', info.stateOrigin)
-        + detailRow('Address', info.address)
-        : detailRow('Gender', info.gender)
-        + detailRow('Date of birth', info.dob)
-        + detailRow("Mother's maiden name", info.mothersMaidenName)
-        + detailRow('Nationality', info.nationality)
-        + detailRow('State of origin', info.stateOfOrigin)
-        + detailRow('Local government', info.lga)
-        + detailRow('Residential address', info.residentialAddress)
-        + detailRow('Permanent address', info.permanentAddress);
+      // Four genuinely different field shapes depending on role — the
+      // Minors KYC form in particular collects nothing like the adult
+      // personal-details set (no occupation, no PEP for either the
+      // minor or the guardian; the guardian instead has ID/employment/
+      // income fields the other roles don't).
+      let roleSpecificRows;
+      if(isJointPartner){
+        roleSpecificRows = detailRow('Relationship to primary holder', info.relationship)
+          + detailRow('ID type', info.idType)
+          + detailRow('ID number', info.idNumber)
+          + detailRow('ID expiry', info.idExpiry)
+          + detailRow('Date of birth', info.dob)
+          + detailRow('Alternate phone', info.altPhone)
+          + detailRow('State of origin / LGA', info.stateOrigin)
+          + detailRow('Address', info.address);
+      } else if(isMinor){
+        roleSpecificRows = detailRow('Sex', info.sex)
+          + detailRow('Date of birth', info.dob)
+          + detailRow('Nationality', info.nationality)
+          + detailRow('State of origin', info.stateOfOrigin)
+          + detailRow('Local government', info.lga);
+      } else if(isGuardian){
+        roleSpecificRows = detailRow('Maiden name', info.maidenName)
+          + detailRow('ID type', info.idType)
+          + detailRow('ID number', info.idNumber)
+          + detailRow('ID expiry', info.idExpiry)
+          + detailRow('Date of birth', info.dob)
+          + detailRow('Nationality', info.nationality)
+          + detailRow('State of origin / LGA', info.stateOriginLga)
+          + detailRow('Postal address', info.postalAddress)
+          + detailRow('Residential address', info.residentialAddress)
+          + detailRow('Tax number', info.taxNumber)
+          + detailRow('Employment status', info.employmentStatus)
+          + detailRow("Employer's name", info.employerName)
+          + detailRow("Employer's address", info.employerAddress)
+          + detailRow('Nature of business', info.natureOfBusiness)
+          + detailRow('Estimated annual income', info.annualIncome);
+      } else {
+        roleSpecificRows = detailRow('Gender', info.gender)
+          + detailRow('Date of birth', info.dob)
+          + detailRow("Mother's maiden name", info.mothersMaidenName)
+          + detailRow('Nationality', info.nationality)
+          + detailRow('State of origin', info.stateOfOrigin)
+          + detailRow('Local government', info.lga)
+          + detailRow('Residential address', info.residentialAddress)
+          + detailRow('Permanent address', info.permanentAddress);
+      }
 
-      // PEP sub-answers only mean anything once the main yes/no is
-      // known, and the "related name" fields only apply when that
-      // specific yes/no was "Yes" — showing them unconditionally would
-      // just be blank noise for the (usual) case where both are "No".
-      let pepRows = detailRow('Politically Exposed Person (PEP)', pep.pep);
-      if(pep.pep === 'Yes') pepRows += detailRow('PEP role / position', pep.pepRole);
-      pepRows += detailRow('Related to a PEP', pep.pepRelated);
-      if(pep.pepRelated === 'Yes') pepRows += detailRow('PEP name / relationship', pep.pepRelation);
+      // PEP declarations don't apply to minors or their guardians —
+      // the source KYC form doesn't ask either one.
+      let pepRows = '';
+      if(!isMinor && !isGuardian){
+        pepRows = detailRow('Politically Exposed Person (PEP)', pep.pep);
+        if(pep.pep === 'Yes') pepRows += detailRow('PEP role / position', pep.pepRole);
+        pepRows += detailRow('Related to a PEP', pep.pepRelated);
+        if(pep.pepRelated === 'Yes') pepRows += detailRow('PEP name / relationship', pep.pepRelation);
+      }
+
+      // Indemnity/risk-disclosure acceptance is the guardian's to
+      // give on a minor account — showing "No" on the minor's own
+      // card would misleadingly imply it was expected of them.
+      const consentRows = isMinor ? '' :
+        detailRow('Indemnity accepted', a.indemnity_accepted ? 'Yes' : 'No') +
+        detailRow('Risk disclosure accepted', a.risk_disclosure_accepted ? 'Yes, ' + new Date(a.risk_disclosure_accepted_at).toLocaleString() : 'No');
 
       applicantsHtml += `<div class="detail-section">
         <h4>${roleLabels[role] || role}</h4>
         ${detailRow('Name', name)}
         ${detailRow('Email', info.email)}
         ${detailRow('Phone', info.phone)}
-        ${!isJointPartner ? detailRow('Occupation', info.occupation) : ''}
+        ${(!isJointPartner && !isMinor && !isGuardian) ? detailRow('Occupation', info.occupation) : ''}
         ${roleSpecificRows}
         ${pepRows}
-        ${detailRow('Indemnity accepted', a.indemnity_accepted ? 'Yes' : 'No')}
-        ${detailRow('Risk disclosure accepted', a.risk_disclosure_accepted ? 'Yes, ' + new Date(a.risk_disclosure_accepted_at).toLocaleString() : 'No')}
+        ${consentRows}
       </div>`;
     });
+
+    let nextOfKinHtml = '';
+    if(app.next_of_kin_info && Object.keys(app.next_of_kin_info).length){
+      const nok = app.next_of_kin_info;
+      nextOfKinHtml = `<div class="detail-section">
+        <h4>Next of kin</h4>
+        ${detailRow('Name', nok.name)}
+        ${detailRow('Date of birth', nok.dob)}
+        ${detailRow('Nationality', nok.nationality)}
+        ${detailRow('Gender', nok.gender)}
+        ${detailRow('Relationship', nok.relationship)}
+        ${detailRow('Phone', nok.phone)}
+        ${detailRow('Contact address', nok.contactAddress)}
+        ${detailRow('Email', nok.email)}
+      </div>`;
+    }
 
     let companyHtml = '';
     if(corp && corp.company_info){
@@ -1615,17 +1665,27 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     }
 
     const banking = app.banking_details || {};
+    const isMinorAccount = app.account_type === 'minor';
     const bankingHtml = `<div class="detail-section">
       <h4>Banking</h4>
       ${detailRow('Bank', banking.bankName)}
       ${detailRow('Account name', banking.accountName)}
       ${detailRow('Account number', banking.accountNumber)}
-      ${detailRow('Account type', banking.accountType)}
-      ${detailRow('Direct settlement', banking.directSettlement)}
-      ${detailRow('Source of funds', banking.sourceOfFunds)}
       ${detailRow('BVN', banking.bvn)}
-      ${detailRow('NIN', banking.nin)}
-      ${detailRow('Tax ID', banking.taxId)}
+      ${isMinorAccount ? `
+        ${detailRow('Bank branch', banking.bankBranch)}
+        ${detailRow('Bank address', banking.bankAddress)}
+        ${detailRow('Settlement mode', banking.settlementMode)}
+        ${detailRow('CSCS number', banking.cscsNumber)}
+        ${detailRow('CH number', banking.chNumber)}
+        ${detailRow('Preferred contact method', [banking.commPhoneCall && 'Phone call', banking.commTextMessage && 'Text message', banking.commEmail && 'Email'].filter(Boolean).join(', '))}
+      ` : `
+        ${detailRow('Account type', banking.accountType)}
+        ${detailRow('Direct settlement', banking.directSettlement)}
+        ${detailRow('Source of funds', banking.sourceOfFunds)}
+        ${detailRow('NIN', banking.nin)}
+        ${detailRow('Tax ID', banking.taxId)}
+      `}
     </div>`;
 
     const docsHtml = `<div class="detail-section">
@@ -1671,6 +1731,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <div style="margin-top:22px;">
           ${companyHtml}
           ${applicantsHtml}
+          ${nextOfKinHtml}
           ${bankingHtml}
           ${docsHtml}
           ${historyHtml}

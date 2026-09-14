@@ -75,12 +75,12 @@ on the `articles` table, not just by the frontend hiding them.
 ## Account opening
 
 `/open-account` is a multi-step wizard for opening a BGL Securities
-brokerage account — Individual, Joint, or Corporate — built from BGL's
-actual KYC and CSCS Direct Settlement paper forms. It reuses the site's
-shared brand CSS (`:root` variables, fonts, `.btn`/`.field`/`.modal`
-classes) and includes the same nav, footer, and waitlist modal as every
-other page, so it's a normal Netlify-served page like `/faq` or
-`/waitlist`.
+brokerage account — Individual, Joint, Corporate, or Minor — built
+from BGL's actual KYC and CSCS Direct Settlement paper forms. It
+reuses the site's shared brand CSS (`:root` variables, fonts,
+`.btn`/`.field`/`.modal` classes) and includes the same nav, footer,
+and waitlist modal as every other page, so it's a normal Netlify-served
+page like `/faq` or `/waitlist`.
 
 - **Assets**: `assets/BGL_Logo.png` (shown as a small badge under the
   page's eyebrow, since this flow is BGL-branded specifically) and
@@ -126,6 +126,35 @@ other page, so it's a normal Netlify-served page like `/faq` or
   lookup should never block a legitimate applicant from submitting,
   worst case a genuine duplicate slips through and gets caught by
   admin during review instead of at the form.
+- **Minor account type** — built from BGL's separate Minors KYC form
+  (a genuinely different document, not a variant of the adult one).
+  Four extra wizard steps beyond the type selection: the minor's own
+  (much shorter) details, the guardian's details, the guardian's
+  employment/financial position, and a next of kin for the guardian
+  — then banking & settlement (CSCS Direct Settlement or In-House,
+  plus CSCS/CH numbers and a preferred-contact-method checklist,
+  rather than the adult flow's account-type/source-of-funds
+  questions), a declaration + indemnity + risk-disclosure step, and
+  documents (minor's passport photo + birth certificate; guardian's
+  passport photo, valid ID, proof of address, and signature). No PEP
+  step — the source form doesn't ask for one, for either the minor or
+  the guardian.
+  Two new `applicants` roles store this: `minor` (personal details
+  only — no PEP, no indemnity/risk-disclosure acceptance, since a
+  minor doesn't sign anything) and `guardian` (personal details with
+  employment/income folded into the same `personal_info` JSONB, plus
+  the *real* indemnity/risk-disclosure acceptance, since the guardian
+  is who signs). Next of kin doesn't fit the `applicants` shape at all
+  (doesn't sign anything, isn't part of the review pipeline), so it's
+  a `next_of_kin_info` JSONB column directly on
+  `account_opening_applications` instead. `resolveApplicantIdentity()`
+  in `submit-application.js` sets `applicant_name` to the *minor's*
+  name (it's their account) but `applicant_email` to the *guardian's*
+  email (the minor has none — the guardian is who all communication
+  actually goes to). Run `supabase/migration_minor_account_type.sql`
+  once (after `schema.sql`) to allow `'minor'` as an `account_type`
+  and `'minor'`/`'guardian'` as `applicant_role` values, and add the
+  `next_of_kin_info` column.
 - **Referral attribution — matches code or name**: `referred_by` is
   free text an applicant typed on the wizard, and not every applicant
   types the actual code — some type the referrer's name instead. Both
