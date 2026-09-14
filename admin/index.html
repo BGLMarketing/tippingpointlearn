@@ -831,6 +831,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <label for="app-search">Search</label>
             <input type="text" id="app-search" placeholder="Name, email, or reference" oninput="loadApplications()">
           </div>
+          <button class="btn btn-ghost" onclick="exportApplications()">Export CSV</button>
         </div>
 
         <table class="article-table">
@@ -873,6 +874,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         </form>
       </div>
 
+      <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+        <button class="btn btn-ghost" onclick="exportReferralCodes()">Export CSV</button>
+      </div>
+
       <table class="article-table">
         <thead>
           <tr><th>Agent</th><th>Code</th><th>Email</th><th>Accounts opened</th><th>IPO subscribers</th><th>Commission</th><th>Created</th><th></th></tr>
@@ -910,6 +915,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <label for="ipo-search">Search</label>
             <input type="text" id="ipo-search" placeholder="Name, email, or reference" oninput="loadIpoSubscriptions()">
           </div>
+          <button class="btn btn-ghost" onclick="exportIpoSubscriptions()">Export CSV</button>
         </div>
 
         <table class="article-table">
@@ -1264,6 +1270,81 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     return div.innerHTML;
   }
 
+  // ---- CSV export (client-side, no backend endpoint needed — the
+  // data's already loaded for whichever tab's currently displayed) ----
+  function csvEscape(val){
+    if(val === null || val === undefined) return '';
+    const s = String(val);
+    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+  }
+  function downloadCsv(filename, rows, columns){
+    if(!rows || !rows.length){
+      alert('Nothing to export — the current list is empty.');
+      return;
+    }
+    const header = columns.map(c => csvEscape(c.label)).join(',');
+    const lines = rows.map(row =>
+      columns.map(c => csvEscape(typeof c.value === 'function' ? c.value(row) : row[c.key])).join(',')
+    );
+    const csv = [header, ...lines].join('\r\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }); // BOM so Excel opens UTF-8 correctly
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+  function todayStamp(){
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  window.exportApplications = function(){
+    downloadCsv(`account-applications-${todayStamp()}.csv`, currentApplicationsList, [
+      { label: 'Reference', key: 'application_reference' },
+      { label: 'Applicant name', key: 'applicant_name' },
+      { label: 'Email', key: 'applicant_email' },
+      { label: 'Phone', key: 'applicant_phone' },
+      { label: 'Account type', key: 'account_type' },
+      { label: 'Status', value: r => (r.status || '').replace(/_/g,' ') },
+      { label: 'Referred by', key: 'referred_by' },
+      { label: 'Submitted', value: r => r.submitted_at ? new Date(r.submitted_at).toISOString() : '' },
+      { label: 'Opened', value: r => r.opened_at ? new Date(r.opened_at).toISOString() : '' },
+      { label: 'CHN', key: 'chn' },
+      { label: 'CSCS Account Number', key: 'csc_account_number' },
+      { label: 'Rejection reason', key: 'rejection_reason' }
+    ]);
+  };
+
+  window.exportReferralCodes = function(){
+    downloadCsv(`referral-codes-${todayStamp()}.csv`, currentReferralCodesList, [
+      { label: 'Agent', key: 'agent_name' },
+      { label: 'Code', key: 'code' },
+      { label: 'Email', key: 'email' },
+      { label: 'Accounts opened', key: 'accounts_opened' },
+      { label: 'IPO subscribers', key: 'ipo_subscribers' },
+      { label: 'Commission (NGN)', value: r => r.commission.toFixed(2) },
+      { label: 'Created', value: r => r.created_at ? new Date(r.created_at).toISOString() : '' }
+    ]);
+  };
+
+  window.exportIpoSubscriptions = function(){
+    downloadCsv(`dangote-ipo-subscriptions-${todayStamp()}.csv`, currentIpoSubscriptionsList, [
+      { label: 'Reference', key: 'subscription_reference' },
+      { label: 'Applicant name', key: 'applicant_name' },
+      { label: 'Email', key: 'applicant_email' },
+      { label: 'Investor type', key: 'investor_type' },
+      { label: 'Units', key: 'number_of_units' },
+      { label: 'Amount payable (NGN)', key: 'amount_payable' },
+      { label: 'Status', value: r => (r.status || '').replace(/_/g,' ') },
+      { label: 'Referred by', key: 'referred_by' },
+      { label: 'Submitted', value: r => r.submitted_at ? new Date(r.submitted_at).toISOString() : '' },
+      { label: 'Units allotted', key: 'units_allotted' }
+    ]);
+  };
+
   async function loadArticles(){
     const { data, error } = await sb
       .from('articles')
@@ -1369,6 +1450,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
      ACCOUNT OPENING APPLICATIONS
      ============================================================ */
   let currentApplication = null;
+  let currentApplicationsList = []; // for CSV export — whatever's currently filtered/displayed
 
   async function loadApplications(){
     const listView = document.getElementById('applications-list-view');
@@ -1397,6 +1479,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         (r.application_reference || '').toLowerCase().includes(search)
       );
     }
+    currentApplicationsList = rows;
 
     if(rows.length === 0){
       tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No applications match.</td></tr>';
@@ -1805,6 +1888,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
      DANGOTE IPO SUBSCRIPTIONS
      ============================================================ */
   let currentIpoSubscription = null;
+  let currentIpoSubscriptionsList = []; // for CSV export
 
   function formatNaira(n){
     if(n === null || n === undefined) return '—';
@@ -1838,6 +1922,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         (r.subscription_reference || '').toLowerCase().includes(search)
       );
     }
+    currentIpoSubscriptionsList = rows;
 
     if(rows.length === 0){
       tbody.innerHTML = '<tr class="empty-row"><td colspan="8">No subscriptions match.</td></tr>';
@@ -2127,6 +2212,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   // no verified payment yet.
   const IPO_PAID_STATUSES = ['payment_confirmed', 'pending_execution', 'executed', 'allotted'];
   const REFERRAL_COMMISSION_RATE = 0.0025; // 0.25%
+  let currentReferralCodesList = []; // for CSV export
 
   function formatNairaAdmin(n){ return '₦' + Number(n || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 }); }
 
@@ -2178,6 +2264,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     }
 
     let totalCommission = 0;
+    const exportRows = [];
 
     tbody.innerHTML = codes.map((c, i) => {
       const accounts = dedupeByRef(accountsByCode[i].data, accountsByName[i].data, 'application_reference');
@@ -2190,6 +2277,16 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         .reduce((sum, s) => sum + (Number(s.amount_payable) || 0), 0);
       const commission = paidAmount * REFERRAL_COMMISSION_RATE;
       totalCommission += commission;
+
+      exportRows.push({
+        agent_name: c.agent_name,
+        code: c.code,
+        email: c.email,
+        accounts_opened: accountsOpened,
+        ipo_subscribers: ipoSubscribers,
+        commission,
+        created_at: c.created_at
+      });
 
       const date = new Date(c.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
       const emailCell = c.email
@@ -2210,6 +2307,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       </tr>`;
     }).join('');
 
+    currentReferralCodesList = exportRows;
     document.getElementById('referral-total-commission').textContent = formatNairaAdmin(totalCommission);
     totalsRow.hidden = false;
   }
