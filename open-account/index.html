@@ -1476,9 +1476,9 @@ function guardianEmploymentFields(){
   </fieldset>`;
 }
 
-function nextOfKinFields(){
+function nextOfKinFields(subtitle){
   return `<h2 class="aow-step-title">Next of kin</h2>
-  <p class="aow-step-sub">For the guardian.</p>
+  <p class="aow-step-sub">${subtitle || 'Someone we can contact in an emergency.'}</p>
   <fieldset>
     <legend>Next of kin details</legend>
     ${textField('nextOfKin','name','Name',true,'full')}
@@ -1627,7 +1627,6 @@ function reviewStepHtml(){
   if(f.accountType === 'minor'){
     const minor = f.minor || {};
     const guardian = f.guardian || {};
-    const nok = f.nextOfKin || {};
     html += `<div class="review-group"><h4>Minor <span class="edit-link" onclick="jumpToStep(1)">Edit</span></h4>
       ${reviewRow('Name', [minor.title, minor.surname, minor.otherNames].filter(Boolean).join(' '))}
       ${reviewRow('Sex', minor.sex)}
@@ -1646,12 +1645,17 @@ function reviewStepHtml(){
       ${reviewRow('Indemnity accepted', guardian.indemnityAccepted ? 'Yes' : 'No')}
       ${reviewRow('Risk disclosure accepted', guardian.riskDisclosureAccepted ? 'Yes, ' + new Date(guardian.riskDisclosureAcceptedAt).toLocaleString() : 'No')}
     </div>`;
-    html += `<div class="review-group"><h4>Next of kin <span class="edit-link" onclick="jumpToStep(4)">Edit</span></h4>
-      ${reviewRow('Name', nok.name)}
-      ${reviewRow('Relationship', nok.relationship)}
-      ${reviewRow('Phone', nok.phone)}
-    </div>`;
   }
+
+  // Next of kin now applies to every account type, not just Minor —
+  // step position varies by type, so the Edit link uses the computed
+  // index rather than a hardcoded one.
+  const nok = f.nextOfKin || {};
+  html += `<div class="review-group"><h4>Next of kin <span class="edit-link" onclick="jumpToStep(getNextOfKinStepIndex())">Edit</span></h4>
+    ${reviewRow('Name', nok.name)}
+    ${reviewRow('Relationship', nok.relationship)}
+    ${reviewRow('Phone', nok.phone)}
+  </div>`;
 
   html += `<div class="review-group"><h4>Banking <span class="edit-link" onclick="jumpToStep(getBankingStepIndex())">Edit</span></h4>
     ${reviewRow('Bank', f.banking.bankName)}
@@ -1686,6 +1690,7 @@ function reviewRow(label, value){
 }
 function capitalize(s){ return s ? s.charAt(0).toUpperCase()+s.slice(1) : ''; }
 function getBankingStepIndex(){ return steps.findIndex(s=>s.id==='banking'); }
+function getNextOfKinStepIndex(){ return steps.findIndex(s=>s.id==='nextOfKin'); }
 function jumpToStep(i){ currentStep = i; renderStep(); }
 
 /* ---------- account type step ---------- */
@@ -1715,12 +1720,14 @@ function buildSteps(type){
     s.push({id:'primary', title:'Personal information', render: ()=>personalFields('primary') + referralField('account') });
     s.push({id:'banking', title:'Banking', render: bankingStepHtml });
     s.push({id:'pep', title:'Disclosures', render: ()=>pepFields('primary') });
+    s.push({id:'nextOfKin', title:'Next of kin', render: ()=>nextOfKinFields() });
     s.push({id:'docs', title:'Documents', render: ()=>documentFields('primary') });
   } else if(type === 'joint'){
     s.push({id:'primary', title:'Primary holder', render: ()=>`<p class="aow-step-sub" style="margin-top:-20px;">Tell us about the first account holder.</p>` + personalFields('primary') + referralField('account') });
     s.push({id:'partner', title:'Joint partner', render: jointPartnerStepHtml });
     s.push({id:'banking', title:'Banking', render: bankingStepHtml });
     s.push({id:'pep', title:'Disclosures', render: ()=>pepFields('primary') });
+    s.push({id:'nextOfKin', title:'Next of kin', render: ()=>nextOfKinFields('For the primary account holder.') });
     s.push({id:'docs', title:'Documents', render: ()=>`<h2 class="aow-step-title">Documents</h2><p class="aow-step-sub">Upload documents for both account holders.</p>` +
       `<p style="font-weight:600;font-size:13px;color:rgba(22,36,26,0.6);margin:0 0 8px;">Primary holder</p>` + documentFields('primary') +
       `<p style="font-weight:600;font-size:13px;color:rgba(22,36,26,0.6);margin:24px 0 8px;">Joint partner</p>` + documentFields('jointPartner') });
@@ -1729,6 +1736,7 @@ function buildSteps(type){
     s.push({id:'sig1', title:'Signatory 1', render: ()=>`<h2 class="aow-step-title">Authorised signatory 1</h2><p class="aow-step-sub">One of two people authorised to operate this account.</p>` + personalFields('signatory1') + pepFields('signatory1') });
     s.push({id:'sig2', title:'Signatory 2', render: sig2StepHtml });
     s.push({id:'banking', title:'Banking', render: bankingStepHtml });
+    s.push({id:'nextOfKin', title:'Next of kin', render: ()=>nextOfKinFields('For Signatory 1.') });
     s.push({id:'docs', title:'Documents', render: ()=>{
       const hasSig2 = state.signatory2 && state.signatory2.hasSecondSignatory === 'Yes';
       return `<h2 class="aow-step-title">Documents</h2><p class="aow-step-sub">Upload company and signatory documents.</p>` +
@@ -1740,7 +1748,7 @@ function buildSteps(type){
     s.push({id:'minor', title:"Minor's details", render: ()=>minorFields() + referralField('account') });
     s.push({id:'guardian', title:"Guardian's details", render: guardianFields });
     s.push({id:'employment', title:'Employment & income', render: guardianEmploymentFields });
-    s.push({id:'nextOfKin', title:'Next of kin', render: nextOfKinFields });
+    s.push({id:'nextOfKin', title:'Next of kin', render: ()=>nextOfKinFields('For the guardian.') });
     s.push({id:'banking', title:'Banking & settlement', render: minorBankingStepHtml });
     s.push({id:'declaration', title:'Declaration', render: minorDeclarationFields });
     s.push({id:'docs', title:'Documents', render: minorDocumentsStepHtml });

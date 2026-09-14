@@ -57,7 +57,7 @@ exports.handler = async (event) => {
         status: 'submitted',
         referred_by: data?.account?.referredBy || null,
         banking_details: data?.banking || {},
-        next_of_kin_info: accountType === 'minor' ? (data?.nextOfKin || {}) : {},
+        next_of_kin_info: data?.nextOfKin || {},
         applicant_name: applicantName,
         applicant_email: applicantEmail
       })
