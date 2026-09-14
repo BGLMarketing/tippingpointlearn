@@ -15,24 +15,9 @@ const { sendIpoSubmissionReceivedEmail, sendIpoInternalAlert } = require('./util
 // this constant if the date ever changes.
 const IPO_OFFER_OPENS_AT = new Date('2026-09-14T00:00:00+01:00');
 
-// SUBSCRIPTIONS_ENABLED: hard kill switch, independent of the date
-// above. /dangote-ipo/subscribe is currently a placeholder — the
-// built wizard was intentionally taken off the live path, expected
-// to be replaced by a separate white-labelled solution — so this
-// endpoint refuses every submission outright regardless of what
-// today's date is, even once IPO_OFFER_OPENS_AT passes. This is the
-// real safety net (the frontend placeholder is only a UI
-// convenience) — set this back to true once subscriptions should
-// actually be accepted again.
-const SUBSCRIPTIONS_ENABLED = false;
-
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  if (!SUBSCRIPTIONS_ENABLED) {
-    return res.status(403).json({ error: 'Dangote IPO subscriptions are not currently being accepted.' });
   }
 
   if (new Date() < IPO_OFFER_OPENS_AT) {
@@ -55,11 +40,12 @@ module.exports = async (req, res) => {
   const docs = Array.isArray(documents) ? documents : [];
   const numberOfUnits = Number(data?.participation?.numberOfUnits) || 0;
   const amountPayable = Number(data?.participation?.amountPayable) || 0;
+  const referredBy = (data?.participation?.referredBy || '').trim() || null;
 
-  if (!numberOfUnits || numberOfUnits < 10) {
-    return res.status(400).json({ error: 'Minimum subscription is 10 units.' });
+  if (!numberOfUnits || numberOfUnits < 50000) {
+    return res.status(400).json({ error: 'Minimum subscription is 50,000 units.' });
   }
-  if ((numberOfUnits - 10) % 10 !== 0) {
+  if ((numberOfUnits - 50000) % 10 !== 0) {
     return res.status(400).json({ error: 'Units above the minimum must be in multiples of 10.' });
   }
 
@@ -78,6 +64,7 @@ module.exports = async (req, res) => {
         applicant_phone: applicantPhone,
         number_of_units: numberOfUnits,
         amount_payable: amountPayable,
+        referred_by: referredBy,
         investor_info: data?.investor || {},
         corporate_info: data?.corporate || {},
         joint_applicant_info: data?.jointApplicant || {},

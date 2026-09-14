@@ -897,6 +897,42 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
     <div id="ipo-panel" hidden>
 
+      <div class="form-card" style="margin-bottom:24px;">
+        <h3>Payment account</h3>
+        <p style="font-size:14px; color:rgba(22,36,26,0.65); margin-bottom:20px; line-height:1.55;">Shown to subscribers as where to pay their IPO amount. Update this before the offer opens.</p>
+        <form id="ipo-payment-account-form">
+          <div class="field-row">
+            <div class="field">
+              <label for="ipo-pa-bank">Bank name</label>
+              <input type="text" id="ipo-pa-bank" placeholder="e.g. Access Bank">
+            </div>
+            <div class="field">
+              <label for="ipo-pa-account-name">Account name</label>
+              <input type="text" id="ipo-pa-account-name" placeholder="e.g. BGL Securities Limited">
+            </div>
+          </div>
+          <div class="field">
+            <label for="ipo-pa-account-number">Account number (NGN)</label>
+            <input type="text" id="ipo-pa-account-number" placeholder="e.g. 0123456789">
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="ipo-pa-account-number-usd">Account number (USD)</label>
+              <input type="text" id="ipo-pa-account-number-usd" placeholder="e.g. 0123456789">
+            </div>
+            <div class="field">
+              <label for="ipo-pa-account-number-gbp">Account number (GBP)</label>
+              <input type="text" id="ipo-pa-account-number-gbp" placeholder="e.g. 0123456789">
+            </div>
+          </div>
+          <p style="font-size:12.5px; color:rgba(22,36,26,0.5); margin:-6px 0 14px;">Bank name and account name are shared across all three currency accounts — only the account number differs.</p>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save payment account</button>
+          </div>
+          <div class="form-status" id="ipo-payment-account-status"></div>
+        </form>
+      </div>
+
       <div id="ipo-list-view">
         <div class="filter-row">
           <div class="field">
@@ -1443,7 +1479,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
     if(tab === 'applications') loadApplications();
     if(tab === 'referrals') loadReferralCodes();
-    if(tab === 'ipo') loadIpoSubscriptions();
+    if(tab === 'ipo'){ loadIpoSubscriptions(); loadIpoPaymentAccount(); }
   };
 
   /* ============================================================
@@ -1962,6 +1998,60 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     return '₦' + Number(n).toLocaleString('en-NG');
   }
 
+  let currentIpoPaymentAccountId = null;
+
+  async function loadIpoPaymentAccount(){
+    const statusEl = document.getElementById('ipo-payment-account-status');
+    statusEl.textContent = '';
+    statusEl.className = 'form-status';
+
+    const { data, error } = await sb.from('ipo_payment_account').select('*').limit(1).maybeSingle();
+    if(error){
+      statusEl.textContent = 'Could not load the payment account: ' + error.message;
+      statusEl.className = 'form-status error';
+      return;
+    }
+    if(!data) return; // seeded row should always exist, but don't blow up if it doesn't
+    currentIpoPaymentAccountId = data.id;
+    document.getElementById('ipo-pa-bank').value = data.bank_name || '';
+    document.getElementById('ipo-pa-account-name').value = data.account_name || '';
+    document.getElementById('ipo-pa-account-number').value = data.account_number || '';
+    document.getElementById('ipo-pa-account-number-usd').value = data.account_number_usd || '';
+    document.getElementById('ipo-pa-account-number-gbp').value = data.account_number_gbp || '';
+  }
+
+  document.getElementById('ipo-payment-account-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const statusEl = document.getElementById('ipo-payment-account-status');
+    statusEl.textContent = '';
+    statusEl.className = 'form-status';
+
+    if(!currentIpoPaymentAccountId){
+      statusEl.textContent = 'Payment account record not loaded yet — try reopening this tab.';
+      statusEl.className = 'form-status error';
+      return;
+    }
+
+    const { data: { session } } = await sb.auth.getSession();
+    const { error } = await sb.from('ipo_payment_account').update({
+      bank_name: document.getElementById('ipo-pa-bank').value.trim(),
+      account_name: document.getElementById('ipo-pa-account-name').value.trim(),
+      account_number: document.getElementById('ipo-pa-account-number').value.trim(),
+      account_number_usd: document.getElementById('ipo-pa-account-number-usd').value.trim(),
+      account_number_gbp: document.getElementById('ipo-pa-account-number-gbp').value.trim(),
+      updated_at: new Date().toISOString(),
+      updated_by: session ? session.user.email : null
+    }).eq('id', currentIpoPaymentAccountId);
+
+    if(error){
+      statusEl.textContent = error.message;
+      statusEl.className = 'form-status error';
+      return;
+    }
+    statusEl.textContent = 'Saved.';
+    statusEl.className = 'form-status success';
+  });
+
   async function loadIpoSubscriptions(){
     const listView = document.getElementById('ipo-list-view');
     const detailView = document.getElementById('ipo-detail-view');
@@ -2053,6 +2143,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       ${detailRow('Name', investorName)}
       ${detailRow('Email', investor.email)}
       ${detailRow('Phone', investor.phone)}
+      ${sub.investor_type !== 'corporate' ? detailRow('State / LGA of origin', [investor.stateOrigin, investor.lgaOrigin].filter(Boolean).join(' / ')) : ''}
     </div>`;
 
     let jointHtml = '';

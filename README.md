@@ -15,8 +15,9 @@ Static site for Tipping Point (BGL Securities' digital investment platform), cur
                     "Account opening" below
 /track-application → Public status lookup for a submitted application
                     (reference + email) — see "Account opening" below
-/referral-status  → Public lookup for a referral code (agent view of who
-                    used it) — see "Account opening" below
+/referral-status  → OTP-gated lookup for a referral code (agent view
+                    of accounts opened + IPO subscribers) — see
+                    "Referral codes" below
 ```
 
 Each page is a self-contained `index.html` (or `<name>.html` at root, which Netlify
@@ -357,51 +358,118 @@ page like `/faq` or `/waitlist`.
   load), taking priority even over a resumed in-progress session,
   since clicking a shared link is a clear, explicit signal.
 
+## Referral codes
+
+One `referral_codes` table covers both `/open-account` and the
+Dangote IPO subscription wizard — a single code tracks an agent's BGL
+account referrals and their IPO subscription referrals together.
+
+- **Admin-issued codes**: admin creates a code per agent/relationship
+  manager from the "Referral codes" tab in `/admin` (agent name,
+  email, and either a custom code or an auto-generated one, e.g.
+  `RM-4X7QK2`). Applicants enter that code in the account-opening
+  wizard's existing "Referred by / Relationship Manager" field, or the
+  IPO wizard's "Referred by" field on the Participation step — no
+  change to either field itself, both are still free text, so a typo
+  or a code that was never actually issued just won't match anything.
+  Matching is case-insensitive: codes are always stored uppercase, and
+  lookups match the applicant's typed value case-insensitively too.
+  Admin manages the `referral_codes` table directly from the browser
+  (same as the Learn articles table) rather than through a function,
+  since creating/deleting a code has no side effects like emails to
+  trigger. Each code's "Copy links" button in the table copies a
+  ready-to-paste block (the code plus both pre-filled links, account-
+  opening and IPO subscribe) to the clipboard in one click. Run
+  `supabase/referral_codes.sql` once to set up the table, then
+  `supabase/migration_ipo_referral.sql` to add the matching
+  `referred_by` column to `ipo_subscriptions`, then
+  `supabase/migration_referral_otp.sql` for the email column and OTP
+  table described below.
+- **Self-service referral codes**: `/open-account`'s entry screen has
+  two links — "Check your referrals" (straight to `/referral-status`)
+  and "Refer someone to BGL", which opens a modal where anyone (not
+  just admin-designated agents) can enter their name, email, and a
+  preferred code to get their own code and both shareable links
+  (`/open-account?ref=<code>` and `/dangote-ipo/subscribe?ref=<code>`).
+  Backed by the public `create-referral-code.js` — validates the code
+  is 3-20 characters of letters/numbers/hyphens, rejects a code that's
+  already taken (case-insensitively) rather than silently generating a
+  different one, since the applicant explicitly chose that code.
+  Self-service codes land in the same `referral_codes` table as
+  admin-created ones (distinguished only by `created_by =
+  'self-service'`) and work identically everywhere. Visiting
+  `/open-account?ref=<code>` or `/dangote-ipo/subscribe?ref=<code>`
+  pre-fills the referral field automatically (reading the `ref` query
+  param on load), taking priority even over a resumed in-progress
+  session, since clicking a shared link is a clear, explicit signal.
+- **Public stats — `/referral-status`, OTP-gated**: knowing the code
+  alone is no longer enough — an agent requests a 6-digit verification
+  code (`request-referral-otp.js`), which is emailed to whatever
+  address is on file for that code (never a self-claimed one, which is
+  what makes the gate meaningful), then enters it to complete the
+  lookup (`referral-lookup.js`, now requiring `{code, otp}` instead of
+  just `{code}`). OTPs are sha-256 hashed before storage (never kept in
+  plain text), expire after 10 minutes, allow at most 5 incorrect
+  attempts before requiring a fresh one, and are single-use. A 60-second
+  cooldown prevents re-sending if a still-valid OTP was just requested.
+  **Codes with no email on file are blocked from lookup entirely** —
+  every code that existed before this feature shipped has no email yet
+  and needs one added from `/admin`'s "Add email" action before anyone
+  can check it. Once verified, the agent sees two counts — **BGL
+  accounts opened** (only applications that reached `opened` status,
+  not every application referred) and **Dangote IPO subscribers**
+  (every IPO subscription referred, at any status) — plus the
+  underlying lists of each, matched by **either the code or the
+  agent's own name** (some applicants type the referrer's name instead
+  of their code — see "Referral attribution" above in Account opening).
+  Only a safe subset of fields is ever returned per record (reference,
+  name, type, status — never email, banking details, documents, or
+  **commission figures**, which are admin-only).
+- **Commission — admin only**: the "Referral codes" tab in `/admin`
+  additionally shows, per code, **accounts opened**, **IPO
+  subscribers**, and **commission owed** — 0.25% of the total amount
+  payable across that code's IPO subscriptions that have reached
+  `payment_confirmed` or later (`payment_confirmed`,
+  `pending_execution`, `executed`, `allotted` all count; each of
+  those statuses implies payment was verified at `payment_confirmed`
+  and never gets un-verified moving forward — `payment_pending` and
+  `payment_unconfirmed` don't count, since there's no confirmed
+  payment yet). A footer row totals the commission owed across every
+  code. This is computed client-side in the admin page from the same
+  RLS-permitted authenticated reads already used elsewhere in
+  `/admin` — no new backend endpoint, and no commission ledger table;
+  if an audit trail of individual commission events becomes necessary
+  later, that's the natural next step, but wasn't needed for this
+  version.
+
 ## Dangote IPO subscription
 
-**Currently inert.** `/dangote-ipo/subscribe` is a placeholder page,
-not the wizard — a separate white-labelled solution is expected to be
-pointed at this URL, so the built wizard was intentionally taken off
-the live path rather than left to go live on its own. Nothing was
-deleted: the full wizard (everything described below) is preserved in
-git history and stays there until someone decides otherwise. Two
-things enforce this beyond just the placeholder page — `submit-ipo-subscription.js`
-has a hardcoded `SUBSCRIPTIONS_ENABLED = false` kill switch checked
-before anything else (a well-formed submission gets a 403 regardless
-of date), and `dangote-ipo/index.html` has `SUBSCRIBE_ROUTE_LIVE = false`
-so the marketing page's "Subscribe" button never auto-reveals and
-points visitors at a dead end. To bring the wizard back: flip both
-flags to `true` and restore `dangote-ipo/subscribe/index.html` from
-git history (or from the `staging/ipo-referral-commissions` branch,
-which has it plus a referral field, cascading state/LGA and country
-dropdowns, and several validation fixes on top).
-
-The rest of this section describes the wizard as built, for whenever
-it's switched back on.
-
 `/dangote-ipo` is the public campaign page (offer terms, FAQ, waitlist).
-Once the offer is open, it links to `/dangote-ipo/subscribe`, a
-multi-step wizard for actually subscribing to units — Individual,
-Corporate, or Joint — built from BGL's official Investor Application
-Form for the offer. It reuses the exact same mechanics as
-`/open-account`: shared brand CSS/nav/footer, session persistence to
-`sessionStorage` across accidental mobile reloads, documents uploaded
-directly to Supabase Storage via signed URLs, and required-field/
-required-document validation that only enforces currently-visible
-fields.
+The offer opened 14 September 2026, and the page links to
+`/dangote-ipo/subscribe`, a multi-step wizard for actually subscribing
+to units — Individual, Corporate, or Joint — built from BGL's official
+Investor Application Form for the offer. It reuses the exact same
+mechanics as `/open-account`: shared brand CSS/nav/footer, session
+persistence to `sessionStorage` across accidental mobile reloads,
+documents uploaded directly to Supabase Storage via signed URLs, and
+required-field/required-document validation that only enforces
+currently-visible fields. A second button, "Less than 50,000 units?
+Subscribe here", sits alongside the main "Subscribe to the IPO" button
+(same visibility toggle) and links out to `publicoffers.bglafrica.com`
+for subscribers below BGL's own minimum.
 
-- **Offer terms**: currently ₦525 per unit, 10-unit minimum, then
+- **Offer terms**: ₦525 per unit, 50,000-unit minimum, then
   multiples of 10 above that — enforced both client-side (live Naira
   calculation as units are entered) and server-side in
   `submit-ipo-subscription.js`. If the terms change for a future offer,
   update both the wizard's participation step and that server-side
   check together, plus the hero/FAQ copy on `/dangote-ipo` itself.
 - **Fields collected**: investor type; participation (units + computed
-  amount payable); investor or corporate identity details; joint
-  applicant details (joint only); CSCS/stockbroker info (CHN,
-  stockbroker name, member code); Naira banking details (bank,
-  account number, BVN); and three required documents — signature,
-  valid ID, payment evidence.
+  amount payable + optional "Referred by"); investor or corporate
+  identity details; joint applicant details (joint only); CSCS/
+  stockbroker info (CHN, stockbroker name, member code, defaulting to
+  "BGL"); Naira banking details (bank, account number, BVN); and three
+  required documents — signature, valid ID, payment evidence.
 - **Document uploads**: same signed-URL pattern as account opening,
   but into a separate private bucket, `ipo-documents`, via
   `upload-url.js` (passing `domain: 'ipo'`) — kept separate from
@@ -419,8 +487,10 @@ fields.
     against the same Supabase project as the rest of the site (adds
     `ipo_subscriptions`, `ipo_subscription_documents`,
     `ipo_subscription_status_history`, `ipo_notify_signups`, and their
-    RLS policies), and create a private Storage bucket named
-    `ipo-documents`.
+    RLS policies), then `supabase/migration_ipo_referral.sql`,
+    `supabase/migration_ipo_payment_account.sql`, and
+    `supabase/migration_ipo_payment_account_multicurrency.sql`, and
+    create a private Storage bucket named `ipo-documents`.
 - **Status pipeline**: `payment_pending` → `payment_confirmed` or
   `payment_unconfirmed` (applicant emailed either way) →
   `pending_execution` → `executed` → `allotted`. Enforced in
@@ -432,15 +502,19 @@ fields.
   **allotted** requires a final units-allotted number. `pending_execution`
   intentionally sends no email — a quiet intermediate step between
   payment confirmation and execution.
-- **Admin review**: `/admin` has a "Dangote IPO" tab — a list of
-  subscriptions (filterable by status, searchable by name/email/
-  reference, showing units and amount payable), a detail view
-  (investor/corporate/joint-applicant info, CSCS & banking details,
-  uploaded documents via short-lived signed URLs, and full status
-  history), and the status-change actions described above. Same
-  pattern as the "Account applications" tab: the admin page never
-  writes `ipo_subscriptions` directly, only `update-status.js`
-  does, using the service role key.
+- **Admin review**: `/admin` has a "Dangote IPO" tab — a "Payment
+  account" form at the top (bank name, account name, and separate
+  NGN/USD/GBP account numbers, shown publicly on the wizard's
+  Participation step and success screen — see "Payment account"
+  below), a list of subscriptions (filterable by status, searchable by
+  name/email/reference, showing units and amount payable, exportable
+  to CSV), a detail view (investor/corporate/joint-applicant info —
+  including state/LGA of origin — CSCS & banking details, uploaded
+  documents via short-lived signed URLs, and full status history), and
+  the status-change actions described above. Same pattern as the
+  "Account applications" tab: the admin page never writes
+  `ipo_subscriptions` directly, only `update-status.js` does, using
+  the service role key.
   - **No resend-notification action yet** for IPO subscriptions —
     unlike account applications, there's no
     `resend-ipo-notification.js` endpoint. If that's needed later,
@@ -453,6 +527,40 @@ fields.
   subscribe yet. Backed by the public `ipo-notify-signup.js`, writing
   to `ipo_notify_signups` — a separate table from the site's general
   waitlist, since these are specifically people who want IPO updates.
+- **Offer-open gating**: the offer opened 14 September 2026, 00:00
+  WAT. `IPO_OFFER_OPENS_AT` (same constant, duplicated in
+  `/dangote-ipo`, `/dangote-ipo/subscribe`, and both copies of
+  `submit-ipo-subscription.js`) hides the "Subscribe" button and
+  blocks the wizard before that moment, showing "Get notified"
+  instead — self-updating on the day itself, no redeploy needed. The
+  frontend checks are a UI convenience only; `submit-ipo-subscription.js`
+  rejects submissions with a 403 before the opening moment regardless
+  of what the frontend shows, since that's what actually matters for
+  a subscription involving real money. If the date ever changes,
+  update all four copies of the constant together.
+- **Payment account (admin-managed, multi-currency)**: the bank
+  details subscribers should pay into live in the single-row
+  `ipo_payment_account` table (`supabase/migration_ipo_payment_account.sql`,
+  then `supabase/migration_ipo_payment_account_multicurrency.sql`),
+  editable from a form at the top of the "Dangote IPO" tab in
+  `/admin` — admin writes it directly from the browser via the
+  authenticated Supabase client, same pattern as Learn articles and
+  referral codes, since there's no side effect like an email to
+  trigger. Bank name and account name are shared fields (BGL's real
+  accounts all sit at the same bank under the same account name);
+  only the account number differs per currency — `account_number`
+  (NGN), `account_number_usd`, `account_number_gbp`. Shown in two
+  places, both via the **public anon key** (no login needed) since
+  bank account numbers for receiving payment are meant to be shared
+  publicly, same as a business posting them for bank transfers: the
+  Participation step (where units are entered — reads on render via
+  `renderPaymentDetails('participationPaymentDetails')`, letting
+  someone see where to pay before they even decide how many units
+  to buy) and the success screen after submission (unchanged trigger,
+  now showing all three currencies via the same shared function).
+  If none of the three account numbers are filled in yet, both
+  places fall back to pointing people at the IPO helpline instead of
+  showing a blank card.
 
 ## Deploying
 

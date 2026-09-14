@@ -230,7 +230,6 @@ async function sendApplicantOpenedEmail({ applicantEmail, applicantName, applica
       <tr><td style="padding:4px 0; color:${BRAND.muted};">CSCS Account Number</td><td style="padding:4px 0; text-align:right; font-weight:bold;">${cscAccountNumber}</td></tr>
     </table>
     <p style="font-size:14px; color:${BRAND.ink}; line-height:1.6;">Thank you for choosing BGL Securities.</p>
-    ${button('Go to Tipping Point', BRAND.siteUrl)}
   `;
 
   const html = wrapEmail('Your BGL account has been opened', body);
