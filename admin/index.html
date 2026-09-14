@@ -1602,18 +1602,24 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
       // PEP declarations don't apply to minors or their guardians —
       // the source KYC form doesn't ask either one.
+      // PEP is only ever collected for 'primary' (individual/joint)
+      // or each signatory (corporate) — joint partners are never
+      // asked, same as minors/guardians, so showing it for them would
+      // just be blank noise from a field that was never presented.
       let pepRows = '';
-      if(!isMinor && !isGuardian){
+      if(!isMinor && !isGuardian && !isJointPartner){
         pepRows = detailRow('Politically Exposed Person (PEP)', pep.pep);
         if(pep.pep === 'Yes') pepRows += detailRow('PEP role / position', pep.pepRole);
         pepRows += detailRow('Related to a PEP', pep.pepRelated);
         if(pep.pepRelated === 'Yes') pepRows += detailRow('PEP name / relationship', pep.pepRelation);
       }
 
-      // Indemnity/risk-disclosure acceptance is the guardian's to
-      // give on a minor account — showing "No" on the minor's own
-      // card would misleadingly imply it was expected of them.
-      const consentRows = isMinor ? '' :
+      // Indemnity/risk-disclosure acceptance is likewise only ever
+      // collected from 'primary' (on a joint account, one signature
+      // covers it) or a minor's guardian — showing "No" for a joint
+      // partner or a minor would misleadingly imply it was asked of
+      // them and declined, rather than never asked at all.
+      const consentRows = (isMinor || isJointPartner) ? '' :
         detailRow('Indemnity accepted', a.indemnity_accepted ? 'Yes' : 'No') +
         detailRow('Risk disclosure accepted', a.risk_disclosure_accepted ? 'Yes, ' + new Date(a.risk_disclosure_accepted_at).toLocaleString() : 'No');
 
@@ -1668,7 +1674,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     const isMinorAccount = app.account_type === 'minor';
     const bankingHtml = `<div class="detail-section">
       <h4>Banking</h4>
-      ${detailRow('Bank', banking.bankName)}
+      ${detailRow('Bank', banking.bankName === 'Other' ? banking.bankNameOther : banking.bankName)}
       ${detailRow('Account name', banking.accountName)}
       ${detailRow('Account number', banking.accountNumber)}
       ${detailRow('BVN', banking.bvn)}
