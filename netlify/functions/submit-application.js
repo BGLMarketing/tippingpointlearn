@@ -12,6 +12,11 @@ const {
 // and no file bytes passing through this function at all, which is
 // also why it's fast and comfortably inside Netlify's function limits.
 
+// Guards checkExistingCustomer below. % and _ are excluded explicitly
+// because they are ilike wildcards, not because they are invalid in an
+// email address.
+const EMAIL_PATTERN = /^[^\s@%_]+@[^\s@%_]+\.[^\s@%_]+$/;
+
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return jsonResponse(405, { error: 'Method not allowed' });
@@ -266,6 +271,20 @@ async function checkExistingCustomer(email) {
   const trimmed = (email || '').trim();
   if (!trimmed) {
     return jsonResponse(400, { error: 'Please provide an email to check.' });
+  }
+
+  // ilike() treats its argument as a PATTERN, not a literal string.
+  // Unguarded, { checkEmail: "%john%" } asks "does ANY customer have
+  // john anywhere in their address" rather than "is this address a
+  // customer" — turning an unauthenticated endpoint into a yes/no
+  // oracle for whether a given person banks with BGL. Rejecting the
+  // wildcard characters before the query is what closes that.
+  //
+  // Deliberately NOT switched to .eq() — stored emails may be mixed
+  // case, and eq is case-sensitive, so that swap would start reporting
+  // genuine existing customers as new.
+  if (trimmed.length > 254 || !EMAIL_PATTERN.test(trimmed)) {
+    return jsonResponse(400, { error: 'Please provide a valid email address.' });
   }
 
   try {

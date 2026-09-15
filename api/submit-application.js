@@ -13,7 +13,7 @@ const {
 // Guards checkExistingCustomer below. % and _ are excluded explicitly
 // because they are ilike wildcards, not because they are invalid in an
 // email address.
-const EMAIL_PATTERN = /^[^\s@%]+@[^\s@%]+\.[^\s@%]+$/;
+const EMAIL_PATTERN = /^[^\s@%_]+@[^\s@%_]+\.[^\s@%_]+$/;
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
