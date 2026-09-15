@@ -820,9 +820,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <select id="app-status-filter" onchange="loadApplications()">
               <option value="">All statuses</option>
               <option value="submitted">Submitted</option>
-              <option value="under_review_client_service">Under review — Client Service</option>
+              <option value="under_review_client_service">Reviewed by Client Service</option>
               <option value="under_review_compliance">Under review — Compliance</option>
-              <option value="account_opening_in_progress">Account opening in progress</option>
+              <option value="account_opening_in_progress">Reviewed by Compliance</option>
               <option value="opened">Opened</option>
               <option value="rejected">Rejected</option>
             </select>
@@ -1529,7 +1529,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <td>${escapeHtml(a.applicant_name || '—')}</td>
         <td style="text-transform:capitalize;">${escapeHtml(a.account_type)}</td>
         <td>${date}</td>
-        <td><span class="status-pill status-${a.status}">${a.status.replace(/_/g,' ')}</span></td>
+        <td><span class="status-pill status-${a.status}">${accountStatusLabel(a.status)}</span></td>
         <td>${escapeHtml(a.chn || '—')}</td>
         <td class="table-actions"><button class="link-btn" onclick="viewApplication('${a.id}')">View</button></td>
       </tr>`;
@@ -1747,7 +1747,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     const historyHtml = `<div class="detail-section">
       <h4>Status history</h4>
       <ul class="history-list">
-        ${(history || []).map(h => `<li>${escapeHtml(h.status.replace(/_/g,' '))} — ${escapeHtml(h.changed_by)} — ${new Date(h.changed_at).toLocaleString()}${h.reason ? ' — ' + escapeHtml(h.reason) : ''}</li>`).join('')}
+        ${(history || []).map(h => `<li>${escapeHtml(accountStatusLabel(h.status))} — ${escapeHtml(h.changed_by)} — ${new Date(h.changed_at).toLocaleString()}${h.reason ? ' — ' + escapeHtml(h.reason) : ''}</li>`).join('')}
       </ul>
     </div>`;
 
@@ -1759,7 +1759,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <div class="detail-overview">
           <div>
             <h3>${escapeHtml(app.applicant_name || 'Untitled application')}</h3>
-            <div class="ref">${escapeHtml(app.application_reference)} · <span class="status-pill status-${app.status}">${app.status.replace(/_/g,' ')}</span></div>
+            <div class="ref">${escapeHtml(app.application_reference)} · <span class="status-pill status-${app.status}">${accountStatusLabel(app.status)}</span></div>
           </div>
           <div class="detail-actions">${actions}</div>
         </div>
@@ -1785,7 +1785,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   function renderActionButtons(app){
     let buttons = '';
     if(app.status === 'submitted'){
-      buttons += `<button class="btn btn-ghost" onclick="startClientServiceReview('${app.id}')">Start Client Service review</button>`;
+      buttons += `<button class="btn btn-ghost" onclick="startClientServiceReview('${app.id}')">Reviewed by Client Service</button>`;
     }
     if(app.status === 'under_review_client_service'){
       buttons += `
@@ -1795,7 +1795,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     }
     if(app.status === 'under_review_compliance'){
       buttons += `
-        <button class="btn btn-primary" onclick="advanceToAccountOpening('${app.id}')">Approve → Account opening in progress</button>
+        <button class="btn btn-primary" onclick="advanceToAccountOpening('${app.id}')">Reviewed by Compliance</button>
         <button class="btn btn-ghost" style="color:#b3452f; border-color:#b3452f;" onclick="openRejectModal('${app.id}')">Reject</button>
       `;
     }
@@ -1834,6 +1834,29 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       alert(err.message);
     }
   };
+
+  // Account-opening status display labels. Separate from the raw DB
+  // value on purpose — the DB value (under_review_client_service,
+  // account_opening_in_progress, etc.) stays as the actual status
+  // machinery, since renaming that would mean a migration and
+  // touching update-status.js's transition logic for no real
+  // benefit. This is purely what admin sees: each button's action is
+  // labeled with what it records having happened, e.g. "Reviewed by
+  // Compliance" for the button compliance clicks once they've
+  // actually approved something, not "compliance review starting".
+  const ACCOUNT_STATUS_LABELS = {
+    submitted: 'Submitted',
+    under_review: 'Under review', // legacy, pre-two-stage-pipeline rows only
+    under_review_client_service: 'Reviewed by Client Service',
+    under_review_compliance: 'Under review — Compliance',
+    account_opening_in_progress: 'Reviewed by Compliance',
+    opened: 'Opened',
+    rejected: 'Rejected',
+    referred_by_updated: 'Referred by updated' // history-log entry, not a real status
+  };
+  function accountStatusLabel(status){
+    return ACCOUNT_STATUS_LABELS[status] || status.replace(/_/g,' ');
+  }
 
   function detailRow(label, value){
     if(value === undefined || value === null || value === '') return '';
