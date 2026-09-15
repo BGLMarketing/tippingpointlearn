@@ -10,6 +10,11 @@ const {
 // {person, docKey, path, fileName, fileType, fileSize} for documents
 // that are already sitting in storage.
 
+// Guards checkExistingCustomer below. % and _ are excluded explicitly
+// because they are ilike wildcards, not because they are invalid in an
+// email address.
+const EMAIL_PATTERN = /^[^\s@%]+@[^\s@%]+\.[^\s@%]+$/;
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -235,6 +240,20 @@ async function checkExistingCustomer(res, email) {
   const trimmed = (email || '').trim();
   if (!trimmed) {
     return res.status(400).json({ error: 'Please provide an email to check.' });
+  }
+
+  // ilike() treats its argument as a PATTERN, not a literal string.
+  // Unguarded, { checkEmail: "%john%" } asks "does ANY customer have
+  // john anywhere in their address" rather than "is this address a
+  // customer" — turning an unauthenticated endpoint into a yes/no
+  // oracle for whether a given person banks with BGL. Rejecting the
+  // wildcard characters before the query is what closes that.
+  //
+  // Deliberately NOT switched to .eq() — stored emails may be mixed
+  // case, and eq is case-sensitive, so that swap would start reporting
+  // genuine existing customers as new.
+  if (trimmed.length > 254 || !EMAIL_PATTERN.test(trimmed)) {
+    return res.status(400).json({ error: 'Please provide a valid email address.' });
   }
 
   try {
