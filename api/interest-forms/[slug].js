@@ -1,12 +1,16 @@
-// api/interest-forms/[slug].js
-import { createClient } from '@supabase/supabase-js';
+const { supabase } = require('../utils/supabaseClient');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+// GET  /api/interest-forms/:slug — looks up the form by slug, for the
+//      public page to render (product name) before showing the form.
+// POST /api/interest-forms/:slug — the actual submission.
+//
+// Converted from the original draft's import/export-default (ES
+// module) syntax to this project's module.exports convention — every
+// other function here uses it, and having exactly one file written
+// differently is a real maintainability risk even though it does
+// actually run correctly on Vercel either way.
 
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
   const { slug } = req.query;
 
   if (req.method === 'GET') {
@@ -23,7 +27,13 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { full_name, email, phone, membership_id, interest_band, consent } = req.body;
+    let body;
+    try {
+      body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+    } catch (err) {
+      return res.status(400).json({ error: 'Malformed request body.' });
+    }
+    const { full_name, email, phone, membership_id, interest_band, consent } = body;
 
     if (!full_name || !email || !phone || !consent) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -54,8 +64,11 @@ export default async function handler(req, res) {
 
     if (insertError) return res.status(500).json({ error: 'Could not save submission' });
 
+    // Never let a flaky email send fail a submission that's already
+    // safely recorded — same reasoning as every other submit endpoint
+    // in this project.
     try {
-      await sendBrevoEmail({
+      await sendInterestFormEmail({
         to: email,
         name: full_name,
         productName: form.product_name,
@@ -68,20 +81,31 @@ export default async function handler(req, res) {
         .update({ email_sent: true })
         .eq('id', submission.id);
     } catch (emailError) {
-      console.error('Brevo send failed:', emailError);
+      console.error('Interest-form confirmation email failed:', emailError);
     }
 
     return res.status(200).json({ success: true });
   }
 
   return res.status(405).end();
-}
+};
 
-async function sendBrevoEmail({ to, name, productName, offerUrl, referralCode }) {
+// Deliberately a template-based Brevo send (BREVO_INTEREST_TEMPLATE_ID
+// + params), not the shared sendEmail() helper in ./utils/brevo.js —
+// that helper only sends raw htmlContent, not a Brevo template, so
+// it's not a fit here. Kept local to this file rather than added to
+// the shared utility, since nothing else in the project needs a
+// template-based send yet.
+async function sendInterestFormEmail({ to, name, productName, offerUrl, referralCode }) {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) {
+    console.error('BREVO_API_KEY not set — interest-form confirmation not sent to', to);
+    return;
+  }
   const response = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
-      'api-key': process.env.BREVO_API_KEY,
+      'api-key': apiKey,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
