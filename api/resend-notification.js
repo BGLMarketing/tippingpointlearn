@@ -1,10 +1,10 @@
-const { supabase } = require('./utils/supabaseClient');
+const { supabase } = require('../lib/supabaseClient');
 const {
   sendApplicantConfirmationEmail,
   sendApplicantUnderReviewEmail,
   sendApplicantOpenedEmail,
   sendApplicantRejectedEmail
-} = require('./utils/brevo');
+} = require('../lib/brevo');
 
 // Re-sends the notification email matching an application's CURRENT
 // stored status — used to backfill applicants who were updated before

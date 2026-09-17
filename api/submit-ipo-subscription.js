@@ -1,5 +1,5 @@
-const { supabase } = require('./utils/supabaseClient');
-const { sendIpoSubmissionReceivedEmail, sendIpoInternalAlert } = require('./utils/ipoEmail');
+const { supabase } = require('../lib/supabaseClient');
+const { sendIpoSubmissionReceivedEmail, sendIpoInternalAlert } = require('../lib/ipoEmail');
 
 // Documents (signature, valid ID, payment evidence) are uploaded
 // directly to Supabase Storage beforehand via upload-url.js

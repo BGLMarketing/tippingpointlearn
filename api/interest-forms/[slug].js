@@ -1,4 +1,4 @@
-const { supabase } = require('../utils/supabaseClient');
+const { supabase } = require('../../lib/supabaseClient');
 
 // GET  /api/interest-forms/:slug — looks up the form by slug, for the
 //      public page to render (product name) before showing the form.

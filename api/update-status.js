@@ -1,15 +1,15 @@
-const { supabase } = require('./utils/supabaseClient');
+const { supabase } = require('../lib/supabaseClient');
 const {
   sendApplicantUnderReviewEmail,
   sendApplicantOpenedEmail,
   sendApplicantRejectedEmail
-} = require('./utils/brevo');
+} = require('../lib/brevo');
 const {
   sendIpoPaymentConfirmedEmail,
   sendIpoPaymentUnconfirmedEmail,
   sendIpoExecutedEmail,
   sendIpoAllottedEmail
-} = require('./utils/ipoEmail');
+} = require('../lib/ipoEmail');
 
 // Merged from update-application-status.js and update-ipo-status.js
 // to stay under Vercel Hobby's 12-serverless-function-per-deployment

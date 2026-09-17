@@ -1,5 +1,5 @@
-const { supabase } = require('./utils/supabaseClient');
-const { wrapEmail, sendEmail } = require('./utils/brevo');
+const { supabase } = require('../lib/supabaseClient');
+const { wrapEmail, sendEmail } = require('../lib/brevo');
 
 // Public endpoint — a lightweight opt-in for visitors who aren't
 // subscribing yet but want to be notified about the Dangote IPO.

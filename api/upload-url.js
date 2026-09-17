@@ -1,4 +1,4 @@
-const { supabase } = require('./utils/supabaseClient');
+const { supabase } = require('../lib/supabaseClient');
 
 const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'application/pdf'];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB — matches the frontend's own cap
