@@ -102,6 +102,18 @@ async function sendInterestFormEmail({ to, name, productName, offerUrl, referral
     console.error('BREVO_API_KEY not set — interest-form confirmation not sent to', to);
     return;
   }
+
+  // Brevo's templateId is numeric — env vars are always strings, and
+  // sending it as a string is a real candidate for why Brevo might
+  // silently accept the request without it becoming a genuine
+  // tracked send. Converting explicitly and failing loudly if it
+  // doesn't parse, rather than sending a malformed value and finding
+  // out from a missing email days later.
+  const templateId = Number(process.env.BREVO_INTEREST_TEMPLATE_ID);
+  if (!process.env.BREVO_INTEREST_TEMPLATE_ID || Number.isNaN(templateId)) {
+    throw new Error(`BREVO_INTEREST_TEMPLATE_ID is not a valid number: ${JSON.stringify(process.env.BREVO_INTEREST_TEMPLATE_ID)}`);
+  }
+
   const response = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
@@ -110,10 +122,21 @@ async function sendInterestFormEmail({ to, name, productName, offerUrl, referral
     },
     body: JSON.stringify({
       to: [{ email: to, name }],
-      templateId: process.env.BREVO_INTEREST_TEMPLATE_ID,
+      templateId,
       params: { name, productName, offerUrl, referralCode }
     })
   });
 
-  if (!response.ok) throw new Error(`Brevo error: ${response.status}`);
+  // Previously only checked response.ok (the HTTP status) and never
+  // looked at the body — meaning a genuine send returns
+  // { messageId: "..." } we never logged, and a same-shaped-but-wrong
+  // response would have passed the .ok check without ever revealing
+  // what Brevo actually did with the request. Reading and logging
+  // the body either way is what makes this diagnosable at all.
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(`Brevo error ${response.status}: ${JSON.stringify(body)}`);
+  }
+  console.log('Interest-form confirmation sent via Brevo:', JSON.stringify(body));
+  return body;
 }
