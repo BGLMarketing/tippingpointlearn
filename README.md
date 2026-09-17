@@ -206,7 +206,8 @@ page like `/faq` or `/waitlist`.
     Settings): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
     `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`,
     `LOGO_URL`, `SITE_URL`. See `netlify/functions/utils/brevo.js` (and
-    its identical copy at `api/utils/brevo.js`) for how these are used.
+    its identical copy at `lib/brevo.js`, used by the Vercel functions
+    under `api/`) for how these are used.
   - **Supabase setup**: run `supabase/schema.sql` once against a Supabase
     project's SQL editor, and create a private Storage bucket named
     `application-documents`. If `schema.sql` was already run before the
@@ -320,47 +321,10 @@ page like `/faq` or `/waitlist`.
   the community"). On `/open-account` itself, that same nav-cta slot
   becomes a static, non-clickable label — the same pattern used for
   "Learn" and "Dangote IPO" on their own pages.
-- **Referral codes**: admin creates a code per agent/relationship
-  manager from the "Referral codes" tab in `/admin` (agent name +
-  either a custom code or an auto-generated one, e.g. `RM-4X7QK2`).
-  Applicants enter that code in the existing "Referred by /
-  Relationship Manager" field — no change to that field itself, it's
-  still free text, so a typo or a code that was never actually issued
-  just won't match anything. Matching is case-insensitive: codes are
-  always stored uppercase, and the lookup matches the applicant's
-  typed value case-insensitively too. The agent can then check
-  `/referral-status` (public, no login) with their code to see a
-  count and list of every application referred with it and each one's
-  current status. Backed by `referral-lookup.js`, same pattern as
-  `track-application.js`: the code itself (admin-issued, not
-  guessable) is the access control, and only a safe subset of fields
-  is ever returned (reference, name, type, status — never email,
-  banking details, or documents). Admin manages the `referral_codes`
-  table directly from the browser (same as the Learn articles table)
-  rather than through a function, since creating/deleting a code has
-  no side effects like emails to trigger. Run `supabase/referral_codes.sql`
-  once to set up the table.
-- **Self-service referral codes**: `/open-account`'s entry screen has
-  two links — "Check your referrals" (straight to `/referral-status`)
-  and "Refer someone to BGL", which opens a modal where anyone (not
-  just admin-designated agents) can enter their name and a preferred
-  code to get their own code and a shareable link
-  (`/open-account?ref=<code>`). Backed by the public
-  `create-referral-code.js` — validates the code is 3-20 characters of
-  letters/numbers/hyphens, rejects a code that's already taken (case-
-  insensitively) rather than silently generating a different one,
-  since the applicant explicitly chose that code. Self-service codes
-  land in the same `referral_codes` table as admin-created ones
-  (distinguished only by `created_by = 'self-service'`) and work
-  identically everywhere — `/referral-status`, the wizard's referral
-  field, etc. Visiting `/open-account?ref=<code>` pre-fills the
-  "Referred by" field automatically (reading the `ref` query param on
-  load), taking priority even over a resumed in-progress session,
-  since clicking a shared link is a clear, explicit signal.
 
 ## Referral codes
 
-One `referral_codes` table covers both `/open-account` and the
+One `referral_codes` table now covers both `/open-account` and the
 Dangote IPO subscription wizard — a single code tracks an agent's BGL
 account referrals and their IPO subscription referrals together.
 
@@ -576,6 +540,31 @@ functions under `netlify/functions/` only deploy through a Git-connected
 build (or the Netlify CLI), never through drag-and-drop. Once connected,
 every `git push` to `main` deploys automatically.
 
+### Testing risky changes on a staging branch first
+
+`main` deploys straight to the live, real-money site, so anything that
+touches money or a live pipeline (the IPO subscription flow,
+commission math, status transitions) should go through a staging
+branch first rather than landing on `main` directly:
+
+```
+git checkout -b staging/<short-description>
+# ... build and commit the change ...
+git push origin staging/<short-description>
+```
+
+Both Netlify and Vercel automatically build a **preview deployment**
+for any pushed branch (Netlify: Site settings → Build & deploy →
+Deploy contexts; Vercel does this by default) — that preview URL
+behaves exactly like production (same functions, same Supabase
+project, since there's no separate staging database) except it's not
+the domain anyone else is using. Test the change there; only merge
+the branch into `main` once it looks right. This doesn't isolate test
+data — a submission made on a preview URL still lands in the same
+production tables as a real one — but it does mean a half-finished or
+broken change is never live on `tippingpoint.bglafrica.com` while it's
+being built.
+
 ### Runs on Netlify or Vercel, without code changes
 
 This repo supports **both** platforms simultaneously:
@@ -585,9 +574,24 @@ This repo supports **both** platforms simultaneously:
 - **Vercel**: the same functions are duplicated (in Vercel's own
   `(req, res)` handler format, since Netlify and Vercel use different
   function signatures) under `api/`, which Vercel auto-detects with no
-  config needed beyond `vercel.json` (which just handles the `/learn/:slug`
-  clean-URL rewrite — folder-based clean URLs like `/open-account` work
-  automatically on Vercel too).
+  config needed beyond `vercel.json` (which handles the `/learn/:slug`
+  and `/interest/:slug` clean-URL rewrites — folder-based clean URLs
+  like `/open-account` work automatically on Vercel too). Vercel's
+  shared helpers live in a top-level `lib/` directory — sibling to
+  `api/`, not nested inside it — not `api/utils/` the way Netlify's
+  do; see "Vercel Hobby's 12-function limit" below for why.
+
+**Watch `cleanUrls` + rewrite destinations together**: this
+`vercel.json` sets `"cleanUrls": true`, which strips `.html` from
+every static file's URL at build time — a rewrite destination still
+written as `/interest/index.html` or `/learn/article.html` silently
+404s, because that exact path no longer exists under that name by the
+time the rewrite runs at the edge. Destinations here are written
+without the extension (`/interest/index`, `/learn/article`) for
+exactly this reason — confirmed against Vercel's own docs ("If
+cleanUrls is set to true... do not include the file extension in the
+source or destination path") after this broke the interest-form page
+in production.
 
 The frontend always calls the platform-neutral path `/api/<function-name>`
 — never `/.netlify/functions/...` directly. On Vercel this resolves
@@ -601,9 +605,13 @@ and its DNS target.
 **If you add or change a function**, update it in both places:
 `netlify/functions/<name>.js` (Netlify's `exports.handler = async (event) => {...}`
 style) and `api/<name>.js` (Vercel's `module.exports = async (req, res) => {...}`
-style). The shared helpers in `netlify/functions/utils/` and `api/utils/`
-are plain Node (no platform-specific code), so those two copies should
-stay identical — only the function-file wrappers differ.
+style). The shared helpers are plain Node (no platform-specific code)
+and should stay identical in content between platforms — but they
+live in *different places* on each: `netlify/functions/utils/` for
+Netlify, `lib/` (top-level, not nested under `api/`) for Vercel. Don't
+put a new Vercel helper file under `api/utils/` — it will silently
+count toward Vercel's 12-function cap even though it isn't a real
+endpoint; see below.
 
 To deploy on Vercel instead of Netlify: create a Vercel account, import
 this GitHub repo as a new project, set the same environment variables
@@ -614,11 +622,22 @@ DNS at Vercel (Vercel's domain settings will show the exact records to add).
 ### Vercel Hobby's 12-function limit
 
 Vercel's free (Hobby) plan caps a deployment at **12 Serverless
-Functions**, counted from the files directly under `api/` (each file
-= one function; files under `api/utils/` don't count, since they're
-imported helpers, not their own endpoints). This repo currently sits
-at **9** — comfortably under, but worth knowing before adding new
-endpoints.
+Functions**, counted from **every file directly under `api/`,
+including subfolders — this counts files under `api/utils/` too**,
+despite them being imported helpers rather than their own endpoints.
+That assumption cost real time to track down: the deployment kept
+failing with "No more than 12 Serverless Functions" even when the
+literal endpoint count looked comfortably under the cap, because
+`api/utils/brevo.js`, `supabaseClient.js`, and `ipoEmail.js` were each
+silently adding to Vercel's real count. Confirmed against Vercel's own
+team guidance (a GitHub discussion response: "we recommend using a
+directory outside of `/api` for any files that should not be created
+as Serverless Functions") — the fix was moving all three to a
+top-level `lib/` directory, sibling to `api/`, not nested inside it.
+This repo currently sits at **10** real endpoint files under `api/`
+— comfortably under, but worth knowing before adding new ones, and
+worth remembering that a shared helper file belongs in `lib/`, never
+back under `api/`, regardless of how it's named or nested.
 
 Two originally-separate endpoint pairs were merged into one file each
 specifically to stay under this cap:
@@ -634,6 +653,17 @@ specifically to stay under this cap:
   (`handleApplicationStatus` / `handleIpoStatus`) sharing only the
   admin-auth check — merging the *file* was what mattered for the
   function count, not merging the logic.
+- `referral-lookup.js` — merged from `referral-lookup.js` and
+  `request-referral-otp.js`, since adding the OTP endpoint as a 10th
+  function broke every deployment even before the `api/utils/`
+  discovery above (the build completed but failed during "Deploying
+  outputs" — Vercel's actual internal count doesn't reliably match
+  the literal file count on its own, so merging is the safe fix
+  rather than trying to find the exact number that's actually safe).
+  Dispatches on whether `otp` is present in the request body — `{code}`
+  to request a code, `{code, otp}` to verify one and get the lookup
+  results — rather than an explicit `action` field, since the two
+  calls already have naturally different shapes.
 
 **If a future feature needs a genuinely new endpoint**, either extend
 one of these two dispatcher files with another `domain` value if it's

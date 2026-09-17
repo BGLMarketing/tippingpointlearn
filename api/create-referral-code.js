@@ -1,4 +1,4 @@
-const { supabase } = require('./utils/supabaseClient');
+const { supabase } = require('../lib/supabaseClient');
 
 const SITE_URL = process.env.SITE_URL || 'https://tippingpoint.bglafrica.com';
 

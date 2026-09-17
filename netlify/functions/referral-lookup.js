@@ -42,30 +42,30 @@ function maskEmail(email) {
   return `${visible}${'*'.repeat(Math.max(1, user.length - visible.length))}@${domain}`;
 }
 
-exports.handler = async (event) => {
-  if (event.httpMethod !== 'POST') {
-    return jsonResponse(405, { error: 'Method not allowed' });
+module.exports = async (req, res) => {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   let body;
   try {
-    body = JSON.parse(event.body || '{}');
+    body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
   } catch (err) {
-    return jsonResponse(400, { error: 'Malformed request body.' });
+    return res.status(400).json({ error: 'Malformed request body.' });
   }
 
   const code = (body.code || '').trim().toUpperCase();
   const otp = (body.otp || '').trim();
 
   if (!code) {
-    return jsonResponse(400, { error: 'Please provide a referral code.' });
+    return res.status(400).json({ error: 'Please provide a referral code.' });
   }
 
-  if (!otp) return requestOtp(code);
-  return verifyOtpAndLookup(code, otp);
+  if (!otp) return requestOtp(res, code);
+  return verifyOtpAndLookup(res, code, otp);
 };
 
-async function requestOtp(code) {
+async function requestOtp(res, code) {
   try {
     const { data: codeRow, error: codeErr } = await supabase
       .from('referral_codes')
@@ -75,10 +75,10 @@ async function requestOtp(code) {
 
     if (codeErr) throw codeErr;
     if (!codeRow) {
-      return jsonResponse(404, { error: "We couldn't find that referral code." });
+      return res.status(404).json({ error: "We couldn't find that referral code." });
     }
     if (!codeRow.email) {
-      return jsonResponse(403, { error: 'This code has no email on file yet — contact BGL to enable lookup for it.' });
+      return res.status(403).json({ error: 'This code has no email on file yet — contact BGL to enable lookup for it.' });
     }
 
     // Cooldown: if a still-pending OTP was requested very recently for
@@ -114,14 +114,14 @@ async function requestOtp(code) {
       await sendReferralOtpEmail({ email: codeRow.email, agentName: codeRow.agent_name, otp: generatedOtp });
     }
 
-    return jsonResponse(200, { ok: true, maskedEmail: maskEmail(codeRow.email) });
+    return res.status(200).json({ ok: true, maskedEmail: maskEmail(codeRow.email) });
   } catch (err) {
     console.error('referral-lookup (request-otp) error:', err);
-    return jsonResponse(500, { error: 'Something went wrong sending your verification code. Please try again.' });
+    return res.status(500).json({ error: 'Something went wrong sending your verification code. Please try again.' });
   }
 }
 
-async function verifyOtpAndLookup(code, otp) {
+async function verifyOtpAndLookup(res, code, otp) {
   try {
     // ---- Verify the OTP first — nothing below runs without it ----
     const { data: otpRow, error: otpErr } = await supabase
@@ -135,17 +135,17 @@ async function verifyOtpAndLookup(code, otp) {
     if (otpErr) throw otpErr;
 
     if (!otpRow) {
-      return jsonResponse(400, { error: 'No verification code is pending for this referral code. Please request a new one.' });
+      return res.status(400).json({ error: 'No verification code is pending for this referral code. Please request a new one.' });
     }
     if (new Date(otpRow.expires_at) < new Date()) {
-      return jsonResponse(400, { error: 'That verification code has expired. Please request a new one.' });
+      return res.status(400).json({ error: 'That verification code has expired. Please request a new one.' });
     }
     if (otpRow.attempts >= MAX_OTP_ATTEMPTS) {
-      return jsonResponse(429, { error: 'Too many incorrect attempts. Please request a new verification code.' });
+      return res.status(429).json({ error: 'Too many incorrect attempts. Please request a new verification code.' });
     }
     if (hashOtp(otp) !== otpRow.otp_hash) {
       await supabase.from('referral_otp_codes').update({ attempts: otpRow.attempts + 1 }).eq('id', otpRow.id);
-      return jsonResponse(400, { error: 'Incorrect verification code. Please try again.' });
+      return res.status(400).json({ error: 'Incorrect verification code. Please try again.' });
     }
 
     // Single-use — mark it spent so it can't be replayed for another
@@ -161,7 +161,7 @@ async function verifyOtpAndLookup(code, otp) {
 
     if (codeErr) throw codeErr;
     if (!codeRow) {
-      return jsonResponse(404, { error: "We couldn't find that referral code." });
+      return res.status(404).json({ error: "We couldn't find that referral code." });
     }
 
     // referred_by is free text an applicant typed on a wizard — not
@@ -191,7 +191,7 @@ async function verifyOtpAndLookup(code, otp) {
 
     const accountsOpened = applications.filter(a => a.status === 'opened').length;
 
-    return jsonResponse(200, {
+    return res.status(200).json({
       agentName: codeRow.agent_name,
       code: codeRow.code,
       accountsOpened,
@@ -215,7 +215,7 @@ async function verifyOtpAndLookup(code, otp) {
     });
   } catch (err) {
     console.error('referral-lookup (verify) error:', err);
-    return jsonResponse(500, { error: 'Something went wrong. Please try again.' });
+    return res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 }
 
@@ -249,12 +249,4 @@ async function matchByCodeOrName(table, selectCols, dateCol, code, agentName) {
   }
   merged.sort((a, b) => new Date(b[dateCol]) - new Date(a[dateCol]));
   return merged;
-}
-
-function jsonResponse(statusCode, body) {
-  return {
-    statusCode,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  };
 }

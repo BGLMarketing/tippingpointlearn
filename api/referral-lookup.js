@@ -1,6 +1,6 @@
 const crypto = require('crypto');
-const { supabase } = require('./utils/supabaseClient');
-const { sendReferralOtpEmail } = require('./utils/brevo');
+const { supabase } = require('../lib/supabaseClient');
+const { sendReferralOtpEmail } = require('../lib/brevo');
 
 // Public endpoint, merged from request-referral-otp.js +
 // referral-lookup.js to stay under Vercel Hobby's serverless function

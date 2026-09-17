@@ -1,6 +1,7 @@
 {
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/learn/:slug", "destination": "/learn/article.html" }
+    { "source": "/learn/:slug", "destination": "/learn/article" },
+    { "source": "/interest/:slug", "destination": "/interest/index" }
   ]
 }

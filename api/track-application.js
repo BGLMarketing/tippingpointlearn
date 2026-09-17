@@ -1,4 +1,4 @@
-const { supabase } = require('./utils/supabaseClient');
+const { supabase } = require('../lib/supabaseClient');
 
 // Public endpoint — both reference AND email must match together;
 // a mismatch on either returns the same generic "not found" response,

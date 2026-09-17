@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tipping Point — Express Your Interest</title>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap');
+
+  :root{
+    --ink: #16241a;
+    --green: #339966;
+    --green-deep: #123c29;
+    --green-mid: #1c5238;
+    --paper: #f6f1e4;
+    --paper-dim: #ece4d0;
+    --gold: #e2a040;
+    --gold-soft: #eec488;
+    --line-dark: rgba(22,36,26,0.12);
+  }
+
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter', sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  h1,h2,h3{font-family:'Fraunces', serif; font-weight:600; line-height:1.1;}
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    font-weight:500;
+    opacity:0.65;
+  }
+
+  .card{
+    background:#fff;
+    border:1px solid var(--line-dark);
+    border-radius:20px;
+    width:100%;
+    max-width:460px;
+    padding:36px 32px 30px;
+    box-shadow:0 30px 80px rgba(15,25,18,0.12);
+  }
+  .card .eyebrow{ margin-bottom:10px; }
+  .card h1{ font-size:24px; margin-bottom:8px; }
+  .card .sub{ font-size:14.5px; color:rgba(22,36,26,0.65); margin-bottom:26px; line-height:1.55; }
+
+  .field{ margin-bottom:16px; text-align:left; }
+  .field label{
+    display:block;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color:rgba(22,36,26,0.55);
+    margin-bottom:6px;
+  }
+  .field input, .field select{
+    width:100%;
+    font-family:'Inter', sans-serif;
+    font-size:15px;
+    padding:12px 14px;
+    border-radius:10px;
+    border:1px solid var(--line-dark);
+    background:#fff;
+    color:var(--ink);
+    outline:none;
+    transition:border-color .15s ease, box-shadow .15s ease;
+  }
+  .field input:focus, .field select:focus{
+    border-color:var(--green);
+    box-shadow:0 0 0 3px rgba(51,153,102,0.15);
+  }
+  .field-consent{
+    display:flex;
+    align-items:flex-start;
+    gap:10px;
+    margin-bottom:22px;
+  }
+  .field-consent input{ margin-top:3px; width:auto; }
+  .field-consent label{
+    font-size:13px;
+    line-height:1.5;
+    color:rgba(22,36,26,0.7);
+    text-transform:none;
+    letter-spacing:normal;
+    font-family:'Inter', sans-serif;
+  }
+
+  .btn-submit{
+    width:100%;
+    padding:15px;
+    font-family:'Inter', sans-serif;
+    font-weight:600;
+    font-size:15px;
+    border-radius:100px;
+    border:none;
+    cursor:pointer;
+    background:var(--green-deep);
+    color:var(--paper);
+    transition:background .18s ease, transform .18s ease, opacity .18s ease;
+  }
+  .btn-submit:hover:not(:disabled){ background:var(--green-mid); transform:translateY(-2px); }
+  .btn-submit:disabled{ opacity:0.6; cursor:not-allowed; }
+
+  .form-error{
+    font-size:13px;
+    color:#b3452f;
+    margin-top:12px;
+    text-align:center;
+    display:none;
+  }
+
+  .success-state, .load-error, .loading-state{ text-align:center; padding:10px 0 4px; }
+  .success-state .check{
+    width:52px; height:52px; border-radius:50%;
+    background:var(--green);
+    display:flex; align-items:center; justify-content:center;
+    margin:0 auto 18px;
+    color:var(--paper);
+    font-size:24px;
+  }
+  .success-state h2{ font-size:22px; margin-bottom:10px; }
+  .success-state p{ font-size:14.5px; color:rgba(22,36,26,0.65); line-height:1.6; }
+
+  .load-error h2{ font-size:20px; margin-bottom:8px; }
+  .load-error p{ font-size:14.5px; color:rgba(22,36,26,0.65); }
+
+  .loading-state p{ font-size:14.5px; color:rgba(22,36,26,0.5); font-family:'IBM Plex Mono', monospace; }
+
+  [hidden]{ display:none !important; }
+</style>
+</head>
+<body>
+
+<div class="card">
+
+  <!-- Loading state -->
+  <div class="loading-state" id="loadingState">
+    <p>Loading…</p>
+  </div>
+
+  <!-- Form state -->
+  <div id="formState" hidden>
+    <div class="eyebrow">Express your interest</div>
+    <h1 id="productHeading">Own a Piece of the Offer</h1>
+    <p class="sub">Fill in your details below and we'll send you everything you need to subscribe.</p>
+
+    <div class="field">
+      <label for="fullName">Full name</label>
+      <input type="text" id="fullName" placeholder="Your full name" required>
+    </div>
+
+    <div class="field">
+      <label for="email">Email address</label>
+      <input type="email" id="email" placeholder="you@email.com" required>
+    </div>
+
+    <div class="field">
+      <label for="phone">Phone number</label>
+      <input type="tel" id="phone" placeholder="Phone number" required>
+    </div>
+
+    <div class="field">
+      <label for="interestBand">Indicative interest amount (optional)</label>
+      <select id="interestBand">
+        <option value="">Prefer not to say</option>
+        <option value="50k-200k">₦50,000 – ₦200,000</option>
+        <option value="200k-1m">₦200,000 – ₦1,000,000</option>
+        <option value="1m+">₦1,000,000+</option>
+      </select>
+    </div>
+
+    <div class="field-consent">
+      <input type="checkbox" id="consent" required>
+      <label for="consent">I consent to be contacted about this offer.</label>
+    </div>
+
+    <button class="btn-submit" id="submitBtn">Submit my interest</button>
+    <p class="form-error" id="formError"></p>
+  </div>
+
+  <!-- Success state -->
+  <div class="success-state" id="successState" hidden>
+    <div class="check">✓</div>
+    <h2>Thanks — you're in.</h2>
+    <p>Check your email — we've sent you a link to complete your subscription.</p>
+  </div>
+
+  <!-- Load error state (bad/inactive slug) -->
+  <div class="load-error" id="loadErrorState" hidden>
+    <h2>This link isn't active</h2>
+    <p>This interest form may have been moved, closed, or never existed. Please check the link and try again.</p>
+  </div>
+
+</div>
+
+<script>
+  // Slug comes from the last non-empty path segment, e.g.
+  // /interest/kenako-dangote -> "kenako-dangote"
+  const pathParts = window.location.pathname.split('/').filter(Boolean);
+  const slug = pathParts[pathParts.length - 1];
+
+  const loadingState = document.getElementById('loadingState');
+  const formState = document.getElementById('formState');
+  const successState = document.getElementById('successState');
+  const loadErrorState = document.getElementById('loadErrorState');
+  const productHeading = document.getElementById('productHeading');
+  const submitBtn = document.getElementById('submitBtn');
+  const formError = document.getElementById('formError');
+
+  async function loadForm(){
+    try{
+      const res = await fetch(`/api/interest-forms/${encodeURIComponent(slug)}`);
+      if(!res.ok){
+        showLoadError();
+        return;
+      }
+      const data = await res.json();
+      productHeading.textContent = `Own a Piece of ${data.product_name}`;
+      loadingState.hidden = true;
+      formState.hidden = false;
+    } catch(err){
+      showLoadError();
+    }
+  }
+
+  function showLoadError(){
+    loadingState.hidden = true;
+    loadErrorState.hidden = false;
+  }
+
+  function showError(msg){
+    formError.textContent = msg;
+    formError.style.display = 'block';
+  }
+
+  submitBtn.addEventListener('click', async () => {
+    const fullName = document.getElementById('fullName').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+    const interestBand = document.getElementById('interestBand').value;
+    const consent = document.getElementById('consent').checked;
+
+    formError.style.display = 'none';
+
+    if(!fullName || !email || !phone){
+      showError('Please fill in your name, email, and phone number.');
+      return;
+    }
+    if(!consent){
+      showError('Please confirm you consent to be contacted.');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting…';
+
+    try{
+      const res = await fetch(`/api/interest-forms/${encodeURIComponent(slug)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: fullName,
+          email,
+          phone,
+          interest_band: interestBand || null,
+          consent
+        })
+      });
+      const result = await res.json();
+      if(!res.ok){
+        showError(result.error || 'Something went wrong. Please try again.');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit my interest';
+        return;
+      }
+      formState.hidden = true;
+      successState.hidden = false;
+    } catch(err){
+      showError('Something went wrong. Please try again.');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit my interest';
+    }
+  });
+
+  loadForm();
+</script>
+
+</body>
+</html>
