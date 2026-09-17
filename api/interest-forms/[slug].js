@@ -90,7 +90,7 @@ module.exports = async (req, res) => {
   return res.status(405).end();
 };
 
-// Deliberately a template-based Brevo send (BREVO_INTEREST_TEMPLATE_ID
+// Deliberately a template-based Brevo send (BREVO_TEMPLATE_ID
 // + params), not the shared sendEmail() helper in ./utils/brevo.js —
 // that helper only sends raw htmlContent, not a Brevo template, so
 // it's not a fit here. Kept local to this file rather than added to
@@ -109,9 +109,13 @@ async function sendInterestFormEmail({ to, name, productName, offerUrl, referral
   // tracked send. Converting explicitly and failing loudly if it
   // doesn't parse, rather than sending a malformed value and finding
   // out from a missing email days later.
-  const templateId = Number(process.env.BREVO_INTEREST_TEMPLATE_ID);
-  if (!process.env.BREVO_INTEREST_TEMPLATE_ID || Number.isNaN(templateId)) {
-    throw new Error(`BREVO_INTEREST_TEMPLATE_ID is not a valid number: ${JSON.stringify(process.env.BREVO_INTEREST_TEMPLATE_ID)}`);
+  //
+  // Reads BREVO_TEMPLATE_ID, not BREVO_INTEREST_TEMPLATE_ID — that's
+  // the actual name configured in Vercel for this project; the
+  // earlier draft's naming didn't match what was really set up.
+  const templateId = Number(process.env.BREVO_TEMPLATE_ID);
+  if (!process.env.BREVO_TEMPLATE_ID || Number.isNaN(templateId)) {
+    throw new Error(`BREVO_TEMPLATE_ID is not a valid number: ${JSON.stringify(process.env.BREVO_TEMPLATE_ID)}`);
   }
 
   const response = await fetch('https://api.brevo.com/v3/smtp/email', {
