@@ -745,6 +745,9 @@ const state = {
   company: {},
   signatory1: {},
   signatory2: {},
+  minor: {},
+  guardian: {},
+  nextOfKin: {},
   banking: {},
   account: {},
   files: {} // person -> docKey -> { path, fileName, fileType, fileSize }
@@ -2009,6 +2012,9 @@ async function submitApplication(){
       company: state.company,
       signatory1: state.signatory1,
       signatory2: state.signatory2,
+      minor: state.minor,
+      guardian: state.guardian,
+      nextOfKin: state.nextOfKin,
       banking: state.banking,
       account: state.account
     },
