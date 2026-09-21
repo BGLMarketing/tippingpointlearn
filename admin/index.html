@@ -848,6 +848,44 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           </div>
         </div>
 
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-label">Submitted</div>
+            <div class="stat-value" id="stat-submitted">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Awaiting Client Service review</div>
+            <div class="stat-value" id="stat-awaiting-client-service">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Awaiting Compliance review</div>
+            <div class="stat-value" id="stat-awaiting-compliance">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Awaiting account opening</div>
+            <div class="stat-value" id="stat-awaiting-account-opening">—</div>
+          </div>
+        </div>
+
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-label">Individual</div>
+            <div class="stat-value" id="stat-type-individual">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Joint</div>
+            <div class="stat-value" id="stat-type-joint">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Corporate</div>
+            <div class="stat-value" id="stat-type-corporate">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Minor</div>
+            <div class="stat-value" id="stat-type-minor">—</div>
+          </div>
+        </div>
+
         <div class="filter-row">
           <div class="field">
             <label for="app-status-filter">Status</label>
@@ -1527,20 +1565,43 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     // four numbers are meant to read as "the whole pipeline at a
     // glance", not shift depending on whatever the table happens to
     // be filtered to.
-    const { data, error } = await sb.from('account_opening_applications').select('status');
+    const statIds = [
+      'stat-total', 'stat-opened', 'stat-rejected', 'stat-pending',
+      'stat-submitted', 'stat-awaiting-client-service', 'stat-awaiting-compliance', 'stat-awaiting-account-opening',
+      'stat-type-individual', 'stat-type-joint', 'stat-type-corporate', 'stat-type-minor'
+    ];
+    const { data, error } = await sb.from('account_opening_applications').select('status, account_type');
     if(error){
-      ['stat-total','stat-opened','stat-rejected','stat-pending'].forEach(id => {
-        document.getElementById(id).textContent = '—';
-      });
+      statIds.forEach(id => { document.getElementById(id).textContent = '—'; });
       return;
     }
     const rows = data || [];
-    const opened = rows.filter(r => r.status === 'opened').length;
-    const rejected = rows.filter(r => r.status === 'rejected').length;
+    const count = (status) => rows.filter(r => r.status === status).length;
+    const countByType = (type) => rows.filter(r => r.account_type === type).length;
+    const opened = count('opened');
+    const rejected = count('rejected');
     document.getElementById('stat-total').textContent = rows.length;
     document.getElementById('stat-opened').textContent = opened;
     document.getElementById('stat-rejected').textContent = rejected;
     document.getElementById('stat-pending').textContent = rows.length - opened - rejected;
+
+    // These four map 1:1 onto the pipeline's non-terminal statuses (see
+    // migration_two_stage_review.sql / migration_account_opening_in_progress.sql):
+    // an application sits in under_review_client_service WHILE Client
+    // Service is reviewing it, under_review_compliance while Compliance
+    // is, and account_opening_in_progress once Compliance has signed
+    // off and it's waiting on ops to open the account and assign a CHN.
+    // Legacy 'under_review' rows (pre-two-stage-pipeline) aren't counted
+    // in any of these four — they still show up in Total/Pending above.
+    document.getElementById('stat-submitted').textContent = count('submitted');
+    document.getElementById('stat-awaiting-client-service').textContent = count('under_review_client_service');
+    document.getElementById('stat-awaiting-compliance').textContent = count('under_review_compliance');
+    document.getElementById('stat-awaiting-account-opening').textContent = count('account_opening_in_progress');
+
+    document.getElementById('stat-type-individual').textContent = countByType('individual');
+    document.getElementById('stat-type-joint').textContent = countByType('joint');
+    document.getElementById('stat-type-corporate').textContent = countByType('corporate');
+    document.getElementById('stat-type-minor').textContent = countByType('minor');
   }
 
   async function loadApplications(){
