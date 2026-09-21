@@ -219,37 +219,54 @@ page like `/faq` or `/waitlist`.
     (filterable by status, searchable by name/email/reference), a detail
     view (applicant/company info, banking, uploaded documents via
     short-lived signed URLs, and full status history), and the actions
-    to move an application through a three-stage review pipeline:
+    to move an application through the review pipeline:
     `submitted → under_review_client_service → under_review_compliance
-    → account_opening_in_progress → opened`. Admin approves at each
-    stage to advance it — there's no way to skip a stage from the UI.
-    Compliance approval moves an application to
-    `account_opening_in_progress` as a plain status bump (no new
-    fields); a separate "Mark as opened" action at that stage is what
-    actually collects the CHN and CSCS Account Number. **Rejecting**
-    is available at any of the first three stages and is terminal: a
-    rejected applicant would need to submit a fresh application,
-    there's no resubmit/edit flow. Marking an application **opened**
-    requires a CHN and CSCS Account Number; **rejecting** requires a
-    reason of at least 10 characters — both are enforced in
-    `netlify/functions/update-status.js`, which also writes the audit
-    trail row for every transition. Only the `under_review_client_service`
-    transition emails the applicant ("your application is under
-    review") — the later moves to `under_review_compliance` and
-    `account_opening_in_progress` are silent internal handoffs, since
-    from the applicant's side nothing has visibly changed yet;
-    `opened` and `rejected` both email the outcome. Run
-    `supabase/migration_two_stage_review.sql` then
+    → account_opening_in_progress → opened`. `submitted` has no manual
+    approve/reject step — any admin simply *opening* the application
+    auto-advances it to `under_review_client_service`, which is what
+    starts the review clock. `under_review_client_service` and
+    `under_review_compliance` are both displayed to admin and to the
+    applicant (on `/track-application`) as one continuous "Under
+    Compliance review" stage, even though internally it's two statuses:
+    a Compliance-role admin approves twice in a row to walk an
+    application from `under_review_client_service` through
+    `under_review_compliance` to `account_opening_in_progress`.
+    **Rejecting** is available at `under_review_client_service`,
+    `under_review_compliance`, and `account_opening_in_progress`, and
+    is terminal: a rejected applicant would need to submit a fresh
+    application, there's no resubmit/edit flow.
+    Every transition is gated by an **admin role** — Compliance owns
+    both `under_review_*` statuses, Account Opening owns
+    `account_opening_in_progress` (marking **opened**, which requires a
+    CHN and CSCS Account Number, or **rejecting**, which requires a
+    reason of at least 10 characters), and Client Service has no
+    approve/reject step at all under this design. Roles are assigned
+    per admin email under the "Manage admins" tab and enforced
+    server-side in `update-status.js` (both the Vercel and Netlify
+    copies) via `APPLICATION_TRANSITION_RULES` — the admin UI hiding
+    buttons the caller's role doesn't cover is a convenience, not the
+    security boundary; a direct API call attempting to skip a stage or
+    act outside the caller's role is rejected there regardless of what
+    the UI shows. Run `supabase/migration_admin_roles.sql` once (after
+    `schema.sql`) to create the `admin_roles` table this depends on —
+    until an admin has a role assigned there, they can view everything
+    but can't act on any status transition.
+    Only the `under_review_client_service` transition emails the
+    applicant ("your application is under review") — the later moves
+    to `under_review_compliance` and `account_opening_in_progress` are
+    silent internal handoffs, since from the applicant's side nothing
+    has visibly changed yet; `opened` and `rejected` both email the
+    outcome. Run `supabase/migration_two_stage_review.sql` then
     `supabase/migration_account_opening_in_progress.sql` once (after
     `schema.sql`) to update the status column's allowed values — the
     old single `under_review` status is kept valid for any
     pre-migration rows still sitting in it (they remain actionable
-    from the admin UI, moving straight to opened/rejected) but
-    nothing new is ever written with that value. Run
-    `supabase/backfill_legacy_under_review_status.sql` to move any
-    existing `under_review` applications into the new pipeline's
-    first stage (`under_review_client_service`) rather than leaving
-    them on the legacy one-step fallback indefinitely — safe to
+    from the admin UI, moving straight to opened/rejected, gated to the
+    Account Opening role) but nothing new is ever written with that
+    value. Run `supabase/backfill_legacy_under_review_status.sql` to
+    move any existing `under_review` applications into the new
+    pipeline's first stage (`under_review_client_service`) rather than
+    leaving them on the legacy one-step fallback indefinitely — safe to
     re-run, and logs the move in each application's status history.
     The admin page never writes these tables
     directly — only that function does, using the service role key, so

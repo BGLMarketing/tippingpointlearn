@@ -715,22 +715,33 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     document.getElementById('resRef').textContent = data.applicationReference;
     document.getElementById('resSubmitted').textContent = new Date(data.submittedAt).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
 
+    // Mirrors the pipeline in update-status.js's APPLICATION_TRANSITION_RULES:
+    // submitted -> under_review_client_service -> under_review_compliance
+    // -> account_opening_in_progress -> opened. under_review_client_service
+    // and under_review_compliance are both Compliance's stage internally,
+    // so they collapse into one "Under Compliance review" step here rather
+    // than exposing that as two separate-looking stages to the applicant.
+    const STAGE_ORDER = ['submitted', 'under_review_client_service', 'under_review_compliance', 'account_opening_in_progress', 'opened'];
     const steps = [
-      { key: 'submitted', label: 'Application received' },
-      { key: 'under_review', label: 'Under review' },
-      { key: 'final', label: data.status === 'rejected' ? 'Requires attention' : 'Account opened' }
+      { key: 'submitted', label: 'Application received', minIndex: 0 },
+      { key: 'client_service', label: 'Under Client Service review', minIndex: 0 },
+      { key: 'compliance', label: 'Under Compliance review', minIndex: 1 },
+      { key: 'account_opening', label: 'Account opening in progress', minIndex: 3 },
+      { key: 'final', label: data.status === 'rejected' ? 'Requires attention' : 'Account opened', minIndex: 4 }
     ];
 
-    const statusOrder = ['submitted', 'under_review', 'opened', 'rejected'];
-    const currentIndex = statusOrder.indexOf(data.status);
+    // Legacy pre-two-stage-pipeline rows ('under_review') don't map onto
+    // STAGE_ORDER at all -- treat them as somewhere past Client Service,
+    // short of the final step, rather than showing nothing reached.
+    const isRejected = data.status === 'rejected';
+    const isLegacy = data.status === 'under_review';
+    const currentIndex = isRejected ? STAGE_ORDER.length - 1
+      : isLegacy ? 2
+      : STAGE_ORDER.indexOf(data.status);
 
     let html = '<div class="review-group"><h4>Status</h4>';
-    steps.forEach((step, i) => {
-      let reached;
-      if(step.key === 'submitted') reached = currentIndex >= 0;
-      else if(step.key === 'under_review') reached = currentIndex >= 1;
-      else reached = currentIndex >= 2;
-
+    steps.forEach((step) => {
+      const reached = currentIndex >= step.minIndex;
       const isRejectedFinal = step.key === 'final' && data.status === 'rejected';
       const mark = reached ? (isRejectedFinal ? '!' : '✓') : '—';
       const color = reached ? (isRejectedFinal ? 'var(--signal)' : 'var(--green)') : 'rgba(22,36,26,0.3)';
