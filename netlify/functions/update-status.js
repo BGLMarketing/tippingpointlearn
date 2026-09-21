@@ -22,6 +22,56 @@ const {
 const APPLICATION_TRANSITIONS = ['under_review_client_service', 'under_review_compliance', 'account_opening_in_progress', 'opened', 'rejected'];
 const IPO_TRANSITIONS = ['payment_confirmed', 'payment_unconfirmed', 'pending_execution', 'executed', 'allotted'];
 
+// Which status an application can move to from its CURRENT status, and
+// which admin role is required to make that move. `null` means any
+// logged-in admin (no role needed) -- currently only true for the very
+// first step, which happens automatically the moment any admin opens a
+// newly-submitted application (see viewApplication() in admin/index.html),
+// not through a manual approve/reject click.
+//
+// under_review_client_service and under_review_compliance are BOTH
+// "Compliance's" stage in the UI (displayed identically as "Under
+// Compliance review") -- Compliance clicks Approve twice to walk an
+// application through both internal statuses on the way to
+// account_opening_in_progress. Client Service has no approve/reject
+// gate at all under this design.
+const APPLICATION_TRANSITION_RULES = {
+  submitted: {
+    under_review_client_service: null
+  },
+  under_review_client_service: {
+    under_review_compliance: 'compliance',
+    rejected: 'compliance'
+  },
+  under_review_compliance: {
+    account_opening_in_progress: 'compliance',
+    rejected: 'compliance'
+  },
+  account_opening_in_progress: {
+    opened: 'account_opening',
+    rejected: 'account_opening'
+  },
+  // Legacy rows still sitting at the old single-stage 'under_review'
+  // status (pre-two-stage-pipeline) have no clean owner under the new
+  // role system -- Account Opening can still move them to a terminal
+  // state rather than leaving them permanently stuck.
+  under_review: {
+    opened: 'account_opening',
+    rejected: 'account_opening'
+  }
+};
+
+const ADMIN_ROLES = ['client_service', 'compliance', 'account_opening'];
+
+async function getAdminRole(email) {
+  const { data, error } = await supabase.from('admin_roles').select('role').eq('email', email.toLowerCase()).maybeSingle();
+  if (error) {
+    console.error('getAdminRole failed:', error);
+    return null;
+  }
+  return data ? data.role : null;
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return jsonResponse(405, { error: 'Method not allowed' });
@@ -52,12 +102,66 @@ exports.handler = async (event) => {
   }
 
   if (body.domain === 'ipo') return handleIpoStatus(adminEmail, body);
+  if (body.domain === 'admin_roles') return handleAdminRoles(adminEmail, body);
   if (body.domain === 'account') {
     if (body.action === 'edit_referred_by') return handleEditReferredBy(adminEmail, body);
     return handleApplicationStatus(adminEmail, body);
   }
-  return jsonResponse(400, { error: "domain must be 'account' or 'ipo'." });
+  return jsonResponse(400, { error: "domain must be 'account', 'ipo', or 'admin_roles'." });
 };
+
+async function handleAdminRoles(adminEmail, body) {
+  const { action } = body;
+
+  if (action === 'list') {
+    try {
+      const [{ data: authData, error: authErr }, { data: roleRows, error: roleErr }] = await Promise.all([
+        supabase.auth.admin.listUsers({ perPage: 200 }),
+        supabase.from('admin_roles').select('email, role')
+      ]);
+      if (authErr) throw authErr;
+      if (roleErr) throw roleErr;
+
+      const roleByEmail = {};
+      (roleRows || []).forEach((r) => { roleByEmail[r.email.toLowerCase()] = r.role; });
+
+      const admins = (authData.users || [])
+        .map((u) => u.email)
+        .filter(Boolean)
+        .sort()
+        .map((email) => ({ email, role: roleByEmail[email.toLowerCase()] || null }));
+
+      return jsonResponse(200, { admins });
+    } catch (err) {
+      console.error('update-status (admin_roles list) error:', err);
+      return jsonResponse(500, { error: 'Could not load admin roles.' });
+    }
+  }
+
+  if (action === 'set_role') {
+    const { targetEmail, role } = body;
+    if (!targetEmail || (role && !ADMIN_ROLES.includes(role))) {
+      return jsonResponse(400, { error: `targetEmail and a valid role (${ADMIN_ROLES.join(', ')}, or empty to unassign) are required.` });
+    }
+    try {
+      if (role) {
+        const { error } = await supabase
+          .from('admin_roles')
+          .upsert({ email: targetEmail.toLowerCase(), role, updated_at: new Date().toISOString() }, { onConflict: 'email' });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('admin_roles').delete().eq('email', targetEmail.toLowerCase());
+        if (error) throw error;
+      }
+      return jsonResponse(200, { ok: true });
+    } catch (err) {
+      console.error('update-status (admin_roles set_role) error:', err);
+      return jsonResponse(500, { error: "Could not update that admin's role." });
+    }
+  }
+
+  return jsonResponse(400, { error: "action must be 'list' or 'set_role'." });
+}
 
 async function handleEditReferredBy(adminEmail, body) {
   const { applicationId, referredBy, reason } = body;
@@ -129,6 +233,29 @@ async function handleApplicationStatus(adminEmail, body) {
       .single();
     if (fetchErr || !appRow) {
       return jsonResponse(404, { error: 'Application not found.' });
+    }
+
+    // Validate this is actually a legal move from the application's
+    // CURRENT status (not just that newStatus is somewhere in the
+    // overall allowed list), and that the calling admin holds the role
+    // authorized to make it. This is the real security boundary for
+    // the role system -- the admin UI hides buttons the caller
+    // shouldn't see, but this check is what actually stops a request
+    // sent directly to the API from skipping a review stage.
+    const rule = APPLICATION_TRANSITION_RULES[appRow.status];
+    const requiredRole = rule ? rule[newStatus] : undefined;
+    if (requiredRole === undefined) {
+      return jsonResponse(409, { error: `This application is at "${appRow.status}" and can't be moved to "${newStatus}".` });
+    }
+    if (requiredRole !== null) {
+      const callerRole = await getAdminRole(adminEmail);
+      if (callerRole !== requiredRole) {
+        return jsonResponse(403, {
+          error: callerRole
+            ? `This action requires the ${requiredRole.replace('_', ' ')} role. Your role is ${callerRole.replace('_', ' ')}.`
+            : `This action requires the ${requiredRole.replace('_', ' ')} role. Your admin account has no role assigned yet — ask another admin to assign one under Manage Admins.`
+        });
+      }
     }
 
     const update = { status: newStatus };

@@ -570,8 +570,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   .status-unpublished{ background:rgba(226,160,64,0.16); color:#8a5c1e; }
   .status-submitted{ background:var(--paper-dim); border:1px solid var(--line-dark); color:rgba(22,36,26,0.6); }
   .status-under_review{ background:rgba(226,160,64,0.16); color:#8a5c1e; }
-  .status-under_review_client_service{ background:rgba(226,160,64,0.16); color:#8a5c1e; }
-  .status-under_review_compliance{ background:rgba(226,160,64,0.28); color:#8a5c1e; font-weight:700; }
+  .status-under_review_client_service, .status-under_review_compliance{ background:rgba(226,160,64,0.28); color:#8a5c1e; font-weight:700; }
   .status-account_opening_in_progress{ background:rgba(51,153,102,0.10); color:var(--green-deep); border:1px solid rgba(51,153,102,0.3); }
   .status-opened{ background:rgba(51,153,102,0.14); color:var(--green-deep); }
   .status-rejected{ background:rgba(179,69,47,0.12); color:#b3452f; }
@@ -604,6 +603,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   .filter-row .field.grow{ flex:1; min-width:220px; }
 
   .stats-row{ display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; margin-bottom:24px; }
+  .stats-row.cols-3{ grid-template-columns:repeat(3, 1fr); }
   .stat-card{
     background:var(--paper-dim); border:1px solid var(--line-dark);
     border-radius:14px; padding:18px 20px;
@@ -773,6 +773,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <button class="tab-btn" id="tab-applications" onclick="switchTab('applications')">Account applications</button>
       <button class="tab-btn" id="tab-referrals" onclick="switchTab('referrals')">Referral codes</button>
       <button class="tab-btn" id="tab-ipo" onclick="switchTab('ipo')">Dangote IPO</button>
+      <button class="tab-btn" id="tab-admins" onclick="switchTab('admins')">Manage admins</button>
     </div>
 
     <div id="articles-panel">
@@ -848,14 +849,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           </div>
         </div>
 
-        <div class="stats-row">
+        <div class="stats-row cols-3">
           <div class="stat-card">
             <div class="stat-label">Submitted</div>
             <div class="stat-value" id="stat-submitted">—</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Awaiting Client Service review</div>
-            <div class="stat-value" id="stat-awaiting-client-service">—</div>
           </div>
           <div class="stat-card">
             <div class="stat-label">Awaiting Compliance review</div>
@@ -891,10 +888,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <label for="app-status-filter">Status</label>
             <select id="app-status-filter" onchange="loadApplications()">
               <option value="">All statuses</option>
-              <option value="submitted">Submitted</option>
-              <option value="under_review_client_service">Reviewed by Client Service</option>
-              <option value="under_review_compliance">Under review — Compliance</option>
-              <option value="account_opening_in_progress">Reviewed by Compliance</option>
+              <option value="submitted">Start Client Service review</option>
+              <option value="under_review_client_service">Under Compliance review (stage 1)</option>
+              <option value="under_review_compliance">Under Compliance review (stage 2)</option>
+              <option value="account_opening_in_progress">Account opening in progress</option>
               <option value="opened">Opened</option>
               <option value="rejected">Rejected</option>
             </select>
@@ -1038,6 +1035,24 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
       <div id="ipo-detail-view" hidden></div>
 
+    </div>
+
+    <div id="admins-panel" hidden>
+      <p style="font-size:14px; color:rgba(22,36,26,0.65); margin-bottom:20px; line-height:1.55;">
+        Every Supabase Auth user below can sign in to this dashboard. Assigning a role here controls which
+        account-opening review actions they're allowed to take — Client Service has no approve/reject step,
+        Compliance handles both review stages before account opening, and Account Opening marks applications
+        opened or rejects them at that final stage. Unassigned admins can still view everything, just can't act
+        on the review pipeline.
+      </p>
+      <table class="article-table">
+        <thead>
+          <tr><th>Admin</th><th>Role</th></tr>
+        </thead>
+        <tbody id="admin-roles-table-body">
+          <tr class="empty-row"><td colspan="2">Loading…</td></tr>
+        </tbody>
+      </table>
     </div>
 
   </div>
@@ -1503,6 +1518,22 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     if(!error) await loadArticles();
   };
 
+  // The logged-in admin's own role in the account-opening review
+  // pipeline (client_service / compliance / account_opening / null).
+  // Fetched once on login via a direct RLS-protected read (admin_roles
+  // is select-only from the browser) -- purely for showing/hiding
+  // action buttons in the UI. The real enforcement happens server-side
+  // in update-status.js, which independently re-checks the caller's
+  // role, so this being stale or spoofed client-side can't bypass it.
+  let currentAdminEmail = null;
+  let currentAdminRole = null;
+
+  async function loadCurrentAdminRole(){
+    if(!currentAdminEmail){ currentAdminRole = null; return; }
+    const { data } = await sb.from('admin_roles').select('role').eq('email', currentAdminEmail.toLowerCase()).maybeSingle();
+    currentAdminRole = data ? data.role : null;
+  }
+
   async function checkAuth(){
     const { data: { session } } = await sb.auth.getSession();
     if(session){
@@ -1510,10 +1541,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       forgotView.hidden = true;
       dashboardView.hidden = false;
       userEmailEl.textContent = session.user.email;
+      currentAdminEmail = session.user.email;
+      await loadCurrentAdminRole();
       await loadArticles();
     } else {
       loginView.hidden = false;
       dashboardView.hidden = true;
+      currentAdminEmail = null;
+      currentAdminRole = null;
     }
   }
 
@@ -1541,17 +1576,82 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     document.getElementById('tab-applications').classList.toggle('active', tab === 'applications');
     document.getElementById('tab-referrals').classList.toggle('active', tab === 'referrals');
     document.getElementById('tab-ipo').classList.toggle('active', tab === 'ipo');
+    document.getElementById('tab-admins').classList.toggle('active', tab === 'admins');
     document.getElementById('articles-panel').hidden = tab !== 'articles';
     document.getElementById('applications-panel').hidden = tab !== 'applications';
     document.getElementById('referrals-panel').hidden = tab !== 'referrals';
     document.getElementById('ipo-panel').hidden = tab !== 'ipo';
+    document.getElementById('admins-panel').hidden = tab !== 'admins';
 
-    const titles = { articles: 'Manage articles', applications: 'Account opening applications', referrals: 'Referral codes', ipo: 'Dangote IPO subscriptions' };
+    const titles = { articles: 'Manage articles', applications: 'Account opening applications', referrals: 'Referral codes', ipo: 'Dangote IPO subscriptions', admins: 'Manage admins' };
     document.getElementById('dashboard-title').textContent = titles[tab];
 
     if(tab === 'applications') loadApplications();
     if(tab === 'referrals') loadReferralCodes();
     if(tab === 'ipo'){ loadIpoSubscriptions(); loadIpoPaymentAccount(); }
+    if(tab === 'admins') loadAdminRoles();
+  };
+
+  /* ============================================================
+     MANAGE ADMINS (review-pipeline role mapping)
+     ============================================================ */
+  const ADMIN_ROLE_LABELS = { client_service: 'Client Service', compliance: 'Compliance', account_opening: 'Account Opening' };
+
+  async function loadAdminRoles(){
+    const tbody = document.getElementById('admin-roles-table-body');
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="2">Loading…</td></tr>';
+    try{
+      const token = await getAuthToken();
+      const res = await fetch('/api/update-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ domain: 'admin_roles', action: 'list' })
+      });
+      const result = await res.json();
+      if(!res.ok) throw new Error(result.error || 'Could not load admins.');
+
+      if(!result.admins || !result.admins.length){
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="2">No admins found.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = result.admins.map(a => `
+        <tr>
+          <td>${escapeHtml(a.email)}</td>
+          <td>
+            <select onchange="setAdminRole('${escapeHtml(a.email)}', this.value)" style="max-width:220px;">
+              <option value="" ${!a.role ? 'selected' : ''}>Unassigned</option>
+              ${Object.entries(ADMIN_ROLE_LABELS).map(([value, label]) =>
+                `<option value="${value}" ${a.role === value ? 'selected' : ''}>${escapeHtml(label)}</option>`
+              ).join('')}
+            </select>
+          </td>
+        </tr>`).join('');
+    } catch(err){
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="2">Error loading admins: ${escapeHtml(err.message)}</td></tr>`;
+    }
+  }
+
+  window.setAdminRole = async function(email, role){
+    try{
+      const token = await getAuthToken();
+      const res = await fetch('/api/update-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ domain: 'admin_roles', action: 'set_role', targetEmail: email, role: role || null })
+      });
+      const result = await res.json();
+      if(!res.ok) throw new Error(result.error || "Could not update that admin's role.");
+
+      // Keep this session's own cached role in sync if we just changed
+      // our own -- otherwise the applications view would keep hiding/
+      // showing buttons based on a now-stale role until next login.
+      if(currentAdminEmail && email.toLowerCase() === currentAdminEmail.toLowerCase()){
+        currentAdminRole = role || null;
+      }
+    } catch(err){
+      alert(err.message);
+      loadAdminRoles(); // revert the dropdown to whatever's actually saved
+    }
   };
 
   /* ============================================================
@@ -1567,7 +1667,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     // be filtered to.
     const statIds = [
       'stat-total', 'stat-opened', 'stat-rejected', 'stat-pending',
-      'stat-submitted', 'stat-awaiting-client-service', 'stat-awaiting-compliance', 'stat-awaiting-account-opening',
+      'stat-submitted', 'stat-awaiting-compliance', 'stat-awaiting-account-opening',
       'stat-type-individual', 'stat-type-joint', 'stat-type-corporate', 'stat-type-minor'
     ];
     const { data, error } = await sb.from('account_opening_applications').select('status, account_type');
@@ -1585,17 +1685,15 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     document.getElementById('stat-rejected').textContent = rejected;
     document.getElementById('stat-pending').textContent = rows.length - opened - rejected;
 
-    // These four map 1:1 onto the pipeline's non-terminal statuses (see
-    // migration_two_stage_review.sql / migration_account_opening_in_progress.sql):
-    // an application sits in under_review_client_service WHILE Client
-    // Service is reviewing it, under_review_compliance while Compliance
-    // is, and account_opening_in_progress once Compliance has signed
-    // off and it's waiting on ops to open the account and assign a CHN.
-    // Legacy 'under_review' rows (pre-two-stage-pipeline) aren't counted
-    // in any of these four — they still show up in Total/Pending above.
+    // Submitted = nobody's opened it yet (opening one auto-advances it,
+    // see viewApplication()). under_review_client_service and
+    // under_review_compliance are both Compliance's stage, shown as one
+    // combined "Awaiting Compliance review" bucket since admin sees them
+    // as a single continuous review, not two separate ones. Legacy
+    // 'under_review' rows (pre-two-stage-pipeline) aren't counted in any
+    // of these three — they still show up in Total/Pending above.
     document.getElementById('stat-submitted').textContent = count('submitted');
-    document.getElementById('stat-awaiting-client-service').textContent = count('under_review_client_service');
-    document.getElementById('stat-awaiting-compliance').textContent = count('under_review_compliance');
+    document.getElementById('stat-awaiting-compliance').textContent = count('under_review_client_service') + count('under_review_compliance');
     document.getElementById('stat-awaiting-account-opening').textContent = count('account_opening_in_progress');
 
     document.getElementById('stat-type-individual').textContent = countByType('individual');
@@ -1671,6 +1769,21 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     if(appErr || !app){
       detailView.innerHTML = `<p style="color:#b3452f;">Could not load this application.</p><button class="link-btn" onclick="backToList()">← Back to list</button>`;
       return;
+    }
+
+    // Auto-advance a freshly-submitted application the moment any admin
+    // opens it — this is what actually starts the review clock (see
+    // APPLICATION_TRANSITION_RULES in update-status.js: this specific
+    // transition needs no role, unlike every other one). There's no
+    // manual approve/reject button at 'submitted' on purpose.
+    if(app.status === 'submitted'){
+      try{
+        await callStatusUpdate({ applicationId: id, newStatus: 'under_review_client_service' });
+        app.status = 'under_review_client_service';
+      } catch(err){
+        console.error('Auto-advancing to review failed:', err);
+        // Not fatal — just render with whatever status it actually is.
+      }
     }
 
     currentApplication = app;
@@ -1900,30 +2013,51 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     `;
   };
 
+  // Which admin role (if any) is required to act at each status, mirroring
+  // APPLICATION_TRANSITION_RULES in update-status.js. This copy is ONLY
+  // used to decide which buttons to show/hide -- it's a convenience, not
+  // a security boundary. The backend independently re-checks the caller's
+  // real role before allowing any transition, so a stale or tampered copy
+  // of this here can't let anyone actually skip a review stage.
+  const REQUIRED_ROLE_BY_STATUS = {
+    under_review_client_service: 'compliance',
+    under_review_compliance: 'compliance',
+    account_opening_in_progress: 'account_opening',
+    under_review: 'account_opening' // legacy pre-two-stage-pipeline rows
+  };
+
   function renderActionButtons(app){
     let buttons = '';
-    if(app.status === 'submitted'){
-      buttons += `<button class="btn btn-ghost" onclick="startClientServiceReview('${app.id}')">Reviewed by Client Service</button>`;
-    }
-    if(app.status === 'under_review_client_service'){
+    const requiredRole = REQUIRED_ROLE_BY_STATUS[app.status];
+
+    // 'submitted' has no manual approve/reject -- opening the
+    // application (see viewApplication()) auto-advances it to
+    // under_review_client_service, which is what actually starts the
+    // review clock. Nothing to render here.
+
+    if(requiredRole && currentAdminRole !== requiredRole){
+      const roleLabel = ADMIN_ROLE_LABELS[requiredRole];
+      buttons += `<p style="font-size:13px; color:rgba(22,36,26,0.55); margin:0;">Awaiting a ${roleLabel} reviewer${currentAdminRole ? '' : ' — your admin account has no role assigned yet'}.</p>`;
+    } else if(app.status === 'under_review_client_service'){
       buttons += `
-        <button class="btn btn-primary" onclick="advanceToCompliance('${app.id}')">Approve → Compliance review</button>
+        <button class="btn btn-primary" onclick="advanceToCompliance('${app.id}')">Approve</button>
         <button class="btn btn-ghost" style="color:#b3452f; border-color:#b3452f;" onclick="openRejectModal('${app.id}')">Reject</button>
       `;
-    }
-    if(app.status === 'under_review_compliance'){
+    } else if(app.status === 'under_review_compliance'){
       buttons += `
-        <button class="btn btn-primary" onclick="advanceToAccountOpening('${app.id}')">Reviewed by Compliance</button>
+        <button class="btn btn-primary" onclick="advanceToAccountOpening('${app.id}')">Approve → Account opening</button>
         <button class="btn btn-ghost" style="color:#b3452f; border-color:#b3452f;" onclick="openRejectModal('${app.id}')">Reject</button>
       `;
-    }
-    if(app.status === 'account_opening_in_progress'){
-      buttons += `<button class="btn btn-primary" onclick="openOpenedModal('${app.id}')">Mark as opened</button>`;
-    }
-    // Legacy: applications still sitting at the old single 'under_review'
-    // status from before the two-stage pipeline. Kept actionable rather
-    // than stuck — admin can still move them straight to opened/rejected.
-    if(app.status === 'under_review'){
+    } else if(app.status === 'account_opening_in_progress'){
+      buttons += `
+        <button class="btn btn-primary" onclick="openOpenedModal('${app.id}')">Mark as opened</button>
+        <button class="btn btn-ghost" style="color:#b3452f; border-color:#b3452f;" onclick="openRejectModal('${app.id}')">Reject</button>
+      `;
+    } else if(app.status === 'under_review'){
+      // Legacy: applications still sitting at the old single
+      // 'under_review' status from before the two-stage pipeline. Kept
+      // actionable rather than stuck — admin can still move them
+      // straight to opened/rejected.
       buttons += `
         <button class="btn btn-primary" onclick="openOpenedModal('${app.id}')">Mark as opened</button>
         <button class="btn btn-ghost" style="color:#b3452f; border-color:#b3452f;" onclick="openRejectModal('${app.id}')">Reject</button>
@@ -1953,21 +2087,23 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     }
   };
 
-  // Account-opening status display labels. Separate from the raw DB
-  // value on purpose — the DB value (under_review_client_service,
-  // account_opening_in_progress, etc.) stays as the actual status
-  // machinery, since renaming that would mean a migration and
-  // touching update-status.js's transition logic for no real
-  // benefit. This is purely what admin sees: each button's action is
-  // labeled with what it records having happened, e.g. "Reviewed by
-  // Compliance" for the button compliance clicks once they've
-  // actually approved something, not "compliance review starting".
+  // Account-opening status display labels, shown to admin. Separate
+  // from the raw DB value on purpose — the DB value
+  // (under_review_client_service, account_opening_in_progress, etc.)
+  // stays as the actual status machinery, since renaming that would
+  // mean a migration and touching update-status.js's transition logic
+  // for no real benefit. under_review_client_service and
+  // under_review_compliance both display identically as "Under
+  // Compliance review" — they're two internal steps of the same
+  // Compliance-owned stage (see APPLICATION_TRANSITION_RULES in
+  // update-status.js), and showing them as two different-sounding
+  // statuses would just be confusing about who owns what.
   const ACCOUNT_STATUS_LABELS = {
-    submitted: 'Submitted',
+    submitted: 'Start Client Service review',
     under_review: 'Under review', // legacy, pre-two-stage-pipeline rows only
-    under_review_client_service: 'Reviewed by Client Service',
-    under_review_compliance: 'Under review — Compliance',
-    account_opening_in_progress: 'Reviewed by Compliance',
+    under_review_client_service: 'Under Compliance review',
+    under_review_compliance: 'Under Compliance review',
+    account_opening_in_progress: 'Account opening in progress',
     opened: 'Opened',
     rejected: 'Rejected',
     referred_by_updated: 'Referred by updated' // history-log entry, not a real status
@@ -2013,15 +2149,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     if(!res.ok) throw new Error(result.error || 'Something went wrong.');
     return result;
   }
-
-  window.startClientServiceReview = async function(id){
-    try{
-      await callStatusUpdate({ applicationId: id, newStatus: 'under_review_client_service' });
-      await viewApplication(id);
-    } catch(err){
-      alert(err.message);
-    }
-  };
 
   window.advanceToCompliance = async function(id){
     try{
