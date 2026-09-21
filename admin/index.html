@@ -603,6 +603,21 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   .filter-row .field{ margin-bottom:0; min-width:160px; }
   .filter-row .field.grow{ flex:1; min-width:220px; }
 
+  .stats-row{ display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; margin-bottom:24px; }
+  .stat-card{
+    background:var(--paper-dim); border:1px solid var(--line-dark);
+    border-radius:14px; padding:18px 20px;
+  }
+  .stat-card .stat-label{
+    font-family:'IBM Plex Mono', monospace; font-size:11.5px; letter-spacing:0.05em;
+    text-transform:uppercase; color:rgba(22,36,26,0.55); margin-bottom:8px;
+  }
+  .stat-card .stat-value{ font-family:'Fraunces', serif; font-size:28px; font-weight:600; color:var(--green-deep); }
+  .stat-card.stat-rejected .stat-value{ color:#b3452f; }
+  @media (max-width:600px){
+    .stats-row{ grid-template-columns:repeat(2, 1fr); }
+  }
+
   .detail-panel{
     background:var(--paper-dim); border:1px solid var(--line-dark);
     border-radius:16px; padding:28px 26px; margin:0 0 40px;
@@ -814,6 +829,25 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <div id="applications-panel" hidden>
 
       <div id="applications-list-view">
+        <div class="stats-row" id="applications-stats">
+          <div class="stat-card">
+            <div class="stat-label">Total applications</div>
+            <div class="stat-value" id="stat-total">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Opened</div>
+            <div class="stat-value" id="stat-opened">—</div>
+          </div>
+          <div class="stat-card stat-rejected">
+            <div class="stat-label">Rejected</div>
+            <div class="stat-value" id="stat-rejected">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Pending</div>
+            <div class="stat-value" id="stat-pending">—</div>
+          </div>
+        </div>
+
         <div class="filter-row">
           <div class="field">
             <label for="app-status-filter">Status</label>
@@ -1488,11 +1522,34 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   let currentApplication = null;
   let currentApplicationsList = []; // for CSV export — whatever's currently filtered/displayed
 
+  async function loadApplicationsSummary(){
+    // Deliberately ignores the status/search filters below — these
+    // four numbers are meant to read as "the whole pipeline at a
+    // glance", not shift depending on whatever the table happens to
+    // be filtered to.
+    const { data, error } = await sb.from('account_opening_applications').select('status');
+    if(error){
+      ['stat-total','stat-opened','stat-rejected','stat-pending'].forEach(id => {
+        document.getElementById(id).textContent = '—';
+      });
+      return;
+    }
+    const rows = data || [];
+    const opened = rows.filter(r => r.status === 'opened').length;
+    const rejected = rows.filter(r => r.status === 'rejected').length;
+    document.getElementById('stat-total').textContent = rows.length;
+    document.getElementById('stat-opened').textContent = opened;
+    document.getElementById('stat-rejected').textContent = rejected;
+    document.getElementById('stat-pending').textContent = rows.length - opened - rejected;
+  }
+
   async function loadApplications(){
     const listView = document.getElementById('applications-list-view');
     const detailView = document.getElementById('application-detail-view');
     listView.hidden = false;
     detailView.hidden = true;
+
+    loadApplicationsSummary();
 
     const tbody = document.getElementById('applications-table-body');
     const statusFilter = document.getElementById('app-status-filter').value;
