@@ -221,27 +221,27 @@ page like `/faq` or `/waitlist`.
     short-lived signed URLs, and full status history), and the actions
     to move an application through the review pipeline:
     `submitted → under_review_client_service → under_review_compliance
-    → account_opening_in_progress → opened`. `submitted` has no manual
-    approve/reject step — any admin simply *opening* the application
-    auto-advances it to `under_review_client_service`, which is what
-    starts the review clock. `under_review_client_service` and
-    `under_review_compliance` are both displayed to admin and to the
-    applicant (on `/track-application`) as one continuous "Under
-    Compliance review" stage, even though internally it's two statuses:
-    a Compliance-role admin approves twice in a row to walk an
-    application from `under_review_client_service` through
-    `under_review_compliance` to `account_opening_in_progress`.
-    **Rejecting** is available at `under_review_client_service`,
+    → account_opening_in_progress → opened`. Every stage requires an
+    explicit **Approve** or **Reject** click from the admin role that
+    owns it — simply opening/viewing an application never changes its
+    status. `under_review_client_service` and `under_review_compliance`
+    are both displayed to admin and to the applicant (on
+    `/track-application`) as one continuous "Under Compliance review"
+    stage, even though internally it's two statuses: a Compliance-role
+    admin approves twice in a row to walk an application from
+    `under_review_client_service` through `under_review_compliance` to
+    `account_opening_in_progress`. **Rejecting** is available at
+    `submitted`, `under_review_client_service`,
     `under_review_compliance`, and `account_opening_in_progress`, and
     is terminal: a rejected applicant would need to submit a fresh
     application, there's no resubmit/edit flow.
-    Every transition is gated by an **admin role** — Compliance owns
-    both `under_review_*` statuses, Account Opening owns
-    `account_opening_in_progress` (marking **opened**, which requires a
-    CHN and CSCS Account Number, or **rejecting**, which requires a
-    reason of at least 10 characters), and Client Service has no
-    approve/reject step at all under this design. Roles are assigned
-    per admin email under the "Manage admins" tab and enforced
+    Every transition is gated by an **admin role** — Client Service
+    owns `submitted`, Compliance owns both `under_review_*` statuses,
+    and Account Opening owns `account_opening_in_progress` (marking
+    **opened**, which requires a CHN and CSCS Account Number, or
+    **rejecting**, which requires a reason of at least 10 characters).
+    Roles are assigned per admin email under the "Manage admins" tab
+    and enforced
     server-side in `update-status.js` (both the Vercel and Netlify
     copies) via `APPLICATION_TRANSITION_RULES` — the admin UI hiding
     buttons the caller's role doesn't cover is a convenience, not the
