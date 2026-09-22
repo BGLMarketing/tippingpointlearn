@@ -63,6 +63,16 @@ const APPLICATION_TRANSITION_RULES = {
 
 const ADMIN_ROLES = ['client_service', 'compliance', 'account_opening'];
 
+// Hardcoded rather than a row in admin_roles on purpose: the super
+// admin's identity has to exist independently of that table (otherwise
+// there's a chicken-and-egg problem -- nobody could grant the first
+// role without already having a way in), and keeping it a code-level
+// constant means it can't be changed via the Manage Admins dropdown,
+// which only ever offers the three ordinary roles. The super admin
+// bypasses every per-role check below AND is the only one allowed to
+// manage other admins' roles at all (see handleAdminRoles).
+const SUPER_ADMIN_EMAIL = 'adeeyotemitope5@gmail.com';
+
 async function getAdminRole(email) {
   const { data, error } = await supabase.from('admin_roles').select('role').eq('email', email.toLowerCase()).maybeSingle();
   if (error) {
@@ -111,6 +121,10 @@ module.exports = async (req, res) => {
 };
 
 async function handleAdminRoles(res, adminEmail, body) {
+  if (adminEmail.toLowerCase() !== SUPER_ADMIN_EMAIL) {
+    return res.status(403).json({ error: 'Only the super admin can manage admin roles.' });
+  }
+
   const { action } = body;
 
   if (action === 'list') {
@@ -247,7 +261,7 @@ async function handleApplicationStatus(res, adminEmail, body) {
     if (requiredRole === undefined) {
       return res.status(409).json({ error: `This application is at "${appRow.status}" and can't be moved to "${newStatus}".` });
     }
-    if (requiredRole !== null) {
+    if (requiredRole !== null && adminEmail.toLowerCase() !== SUPER_ADMIN_EMAIL) {
       const callerRole = await getAdminRole(adminEmail);
       if (callerRole !== requiredRole) {
         return res.status(403).json({

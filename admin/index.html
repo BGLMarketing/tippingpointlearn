@@ -773,7 +773,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <button class="tab-btn" id="tab-applications" onclick="switchTab('applications')">Account applications</button>
       <button class="tab-btn" id="tab-referrals" onclick="switchTab('referrals')">Referral codes</button>
       <button class="tab-btn" id="tab-ipo" onclick="switchTab('ipo')">Dangote IPO</button>
-      <button class="tab-btn" id="tab-admins" onclick="switchTab('admins')">Manage admins</button>
+      <button class="tab-btn" id="tab-admins" onclick="switchTab('admins')" style="display:none;">Manage admins</button>
     </div>
 
     <div id="articles-panel">
@@ -1528,6 +1528,16 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   let currentAdminEmail = null;
   let currentAdminRole = null;
 
+  // Mirrors SUPER_ADMIN_EMAIL in update-status.js -- kept as a code
+  // constant here too (not read from admin_roles) so the Manage Admins
+  // tab's own visibility doesn't depend on the same table it manages.
+  // Purely a UI convenience: the actual gate is the 403 the backend
+  // returns to anyone else calling the admin_roles endpoints directly.
+  const SUPER_ADMIN_EMAIL = 'adeeyotemitope5@gmail.com';
+  function isSuperAdmin(){
+    return !!currentAdminEmail && currentAdminEmail.toLowerCase() === SUPER_ADMIN_EMAIL;
+  }
+
   async function loadCurrentAdminRole(){
     if(!currentAdminEmail){ currentAdminRole = null; return; }
     const { data } = await sb.from('admin_roles').select('role').eq('email', currentAdminEmail.toLowerCase()).maybeSingle();
@@ -1543,6 +1553,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       userEmailEl.textContent = session.user.email;
       currentAdminEmail = session.user.email;
       await loadCurrentAdminRole();
+      document.getElementById('tab-admins').style.display = isSuperAdmin() ? '' : 'none';
       await loadArticles();
     } else {
       loginView.hidden = false;
@@ -1572,6 +1583,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
      TAB SWITCHING
      ============================================================ */
   window.switchTab = function(tab){
+    // Belt-and-braces alongside the hidden tab button — even if
+    // 'admins' is reached some other way, don't render it for anyone
+    // but the super admin. The list/set_role calls it would make are
+    // rejected server-side regardless, so this is UI politeness only.
+    if(tab === 'admins' && !isSuperAdmin()) tab = 'articles';
+
     document.getElementById('tab-articles').classList.toggle('active', tab === 'articles');
     document.getElementById('tab-applications').classList.toggle('active', tab === 'applications');
     document.getElementById('tab-referrals').classList.toggle('active', tab === 'referrals');
@@ -1614,18 +1631,22 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         tbody.innerHTML = '<tr class="empty-row"><td colspan="2">No admins found.</td></tr>';
         return;
       }
-      tbody.innerHTML = result.admins.map(a => `
-        <tr>
-          <td>${escapeHtml(a.email)}</td>
-          <td>
-            <select onchange="setAdminRole('${escapeHtml(a.email)}', this.value)" style="max-width:220px;">
+      tbody.innerHTML = result.admins.map(a => {
+        // The super admin isn't managed through this table at all —
+        // her access is a code-level constant (see SUPER_ADMIN_EMAIL)
+        // that bypasses every role check, so a dropdown here would be
+        // meaningless at best and misleading at worst (it would look
+        // like she has no permissions until "assigned" one).
+        const roleCell = a.email.toLowerCase() === SUPER_ADMIN_EMAIL
+          ? `<span style="font-weight:600; color:var(--green-deep);">Super Admin — full access</span>`
+          : `<select onchange="setAdminRole('${escapeHtml(a.email)}', this.value)" style="max-width:220px;">
               <option value="" ${!a.role ? 'selected' : ''}>Unassigned</option>
               ${Object.entries(ADMIN_ROLE_LABELS).map(([value, label]) =>
                 `<option value="${value}" ${a.role === value ? 'selected' : ''}>${escapeHtml(label)}</option>`
               ).join('')}
-            </select>
-          </td>
-        </tr>`).join('');
+            </select>`;
+        return `<tr><td>${escapeHtml(a.email)}</td><td>${roleCell}</td></tr>`;
+      }).join('');
     } catch(err){
       tbody.innerHTML = `<tr class="empty-row"><td colspan="2">Error loading admins: ${escapeHtml(err.message)}</td></tr>`;
     }
@@ -2035,7 +2056,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     // under_review_client_service, which is what actually starts the
     // review clock. Nothing to render here.
 
-    if(requiredRole && currentAdminRole !== requiredRole){
+    if(requiredRole && !isSuperAdmin() && currentAdminRole !== requiredRole){
       const roleLabel = ADMIN_ROLE_LABELS[requiredRole];
       buttons += `<p style="font-size:13px; color:rgba(22,36,26,0.55); margin:0;">Awaiting a ${roleLabel} reviewer${currentAdminRole ? '' : ' — your admin account has no role assigned yet'}.</p>`;
     } else if(app.status === 'under_review_client_service'){
