@@ -2028,6 +2028,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         ${detailRow('Submitted', new Date(app.submitted_at).toLocaleString())}
         ${app.chn ? detailRow('CHN', app.chn) : ''}
         ${app.csc_account_number ? detailRow('CSCS Account Number', app.csc_account_number) : ''}
+        ${app.needs_update_count ? detailRow('Update requests sent', `${app.needs_update_count} of ${MAX_NEEDS_UPDATE_REQUESTS}`) : ''}
         ${app.status === 'needs_update' && app.needs_update_note ? detailRow('Update requested', app.needs_update_note) : ''}
         ${app.status === 'needs_update' && app.resume_token ? `
           <div class="detail-row"><span>Resume link</span><span style="word-break:break-all; font-size:12px; max-width:60%;">
@@ -2062,6 +2063,21 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     under_review: 'account_opening' // legacy pre-two-stage-pipeline rows
   };
 
+  const MAX_NEEDS_UPDATE_REQUESTS = 2;
+
+  // A fixed cap (see migration_needs_update_status.sql's needs_update_count,
+  // never reset on resubmission) on how many times a given application can
+  // be sent back — otherwise this could bounce between admin and applicant
+  // indefinitely. Once hit, only Approve/Reject remain; this is UI
+  // convenience only, the real limit is enforced server-side in
+  // update-status.js.
+  function requestUpdateButtonHtml(app){
+    if((app.needs_update_count || 0) >= MAX_NEEDS_UPDATE_REQUESTS){
+      return `<span style="font-size:12px; color:rgba(22,36,26,0.5); align-self:center;">Update requests used (${MAX_NEEDS_UPDATE_REQUESTS}/${MAX_NEEDS_UPDATE_REQUESTS})</span>`;
+    }
+    return `<button class="btn btn-ghost" onclick="openRequestUpdateModal('${app.id}')">Request update</button>`;
+  }
+
   function renderActionButtons(app){
     let buttons = '';
     const requiredRole = REQUIRED_ROLE_BY_STATUS[app.status];
@@ -2072,25 +2088,25 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     } else if(app.status === 'submitted'){
       buttons += `
         <button class="btn btn-primary" onclick="advanceToClientServiceReview('${app.id}')">Approve</button>
-        <button class="btn btn-ghost" onclick="openRequestUpdateModal('${app.id}')">Request update</button>
+        ${requestUpdateButtonHtml(app)}
         <button class="btn btn-ghost" style="color:#b3452f; border-color:#b3452f;" onclick="openRejectModal('${app.id}')">Reject</button>
       `;
     } else if(app.status === 'under_review_client_service'){
       buttons += `
         <button class="btn btn-primary" onclick="advanceToCompliance('${app.id}')">Approve</button>
-        <button class="btn btn-ghost" onclick="openRequestUpdateModal('${app.id}')">Request update</button>
+        ${requestUpdateButtonHtml(app)}
         <button class="btn btn-ghost" style="color:#b3452f; border-color:#b3452f;" onclick="openRejectModal('${app.id}')">Reject</button>
       `;
     } else if(app.status === 'under_review_compliance'){
       buttons += `
         <button class="btn btn-primary" onclick="advanceToAccountOpening('${app.id}')">Approve → Account opening</button>
-        <button class="btn btn-ghost" onclick="openRequestUpdateModal('${app.id}')">Request update</button>
+        ${requestUpdateButtonHtml(app)}
         <button class="btn btn-ghost" style="color:#b3452f; border-color:#b3452f;" onclick="openRejectModal('${app.id}')">Reject</button>
       `;
     } else if(app.status === 'account_opening_in_progress'){
       buttons += `
         <button class="btn btn-primary" onclick="openOpenedModal('${app.id}')">Mark as opened</button>
-        <button class="btn btn-ghost" onclick="openRequestUpdateModal('${app.id}')">Request update</button>
+        ${requestUpdateButtonHtml(app)}
         <button class="btn btn-ghost" style="color:#b3452f; border-color:#b3452f;" onclick="openRejectModal('${app.id}')">Reject</button>
       `;
     } else if(app.status === 'under_review'){
@@ -2100,7 +2116,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       // straight to opened/rejected.
       buttons += `
         <button class="btn btn-primary" onclick="openOpenedModal('${app.id}')">Mark as opened</button>
-        <button class="btn btn-ghost" onclick="openRequestUpdateModal('${app.id}')">Request update</button>
+        ${requestUpdateButtonHtml(app)}
         <button class="btn btn-ghost" style="color:#b3452f; border-color:#b3452f;" onclick="openRejectModal('${app.id}')">Reject</button>
       `;
     } else if(app.status === 'needs_update'){

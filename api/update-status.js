@@ -288,6 +288,10 @@ async function handleApplicationStatus(res, adminEmail, body) {
       }
     }
 
+    if (newStatus === 'needs_update' && (appRow.needs_update_count || 0) >= 2) {
+      return res.status(409).json({ error: 'This application has already been sent back for updates twice — approve or reject it instead.' });
+    }
+
     const update = { status: newStatus };
     if (newStatus === 'under_review_client_service') {
       update.review_started_at = new Date().toISOString();
@@ -314,6 +318,7 @@ async function handleApplicationStatus(res, adminEmail, body) {
       update.needs_update_note = adminNote.trim();
       update.needs_update_at = new Date().toISOString();
       update.needs_update_by = adminEmail;
+      update.needs_update_count = (appRow.needs_update_count || 0) + 1;
     } else if (newStatus === 'opened') {
       update.opened_at = new Date().toISOString();
       update.opened_by = adminEmail;

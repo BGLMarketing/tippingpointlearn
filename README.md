@@ -296,11 +296,16 @@ page like `/faq` or `/waitlist`.
     the email didn't land, the resume link itself in the application's
     detail view (every admin already has full read access to every
     other field there regardless of role, so this isn't a new class of
-    exposure). Run `supabase/migration_needs_update_status.sql` once
-    (after `schema.sql` and `migration_admin_roles.sql`) to add the
+    exposure). Capped at 2 requests per application — `needs_update_count`
+    increments every time (never reset by a resubmission, or the cap
+    would be meaningless) and once it reaches 2, "Request update" stops
+    being offered for that application; only Approve/Reject remain,
+    enforced both in the admin UI and, as the real boundary, server-side
+    in `update-status.js`. Run `supabase/migration_needs_update_status.sql`
+    once (after `schema.sql` and `migration_admin_roles.sql`) to add the
     status value and the `needs_update_note` / `needs_update_at` /
-    `needs_update_by` / `resume_token` / `resume_token_created_at`
-    columns this depends on.
+    `needs_update_by` / `needs_update_count` / `resume_token` /
+    `resume_token_created_at` columns this depends on.
     The admin page never writes these tables
     directly — only that function does, using the service role key, so
     the emails and audit trail can't be bypassed by calling Supabase

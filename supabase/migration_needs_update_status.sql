@@ -39,4 +39,10 @@ alter table account_opening_applications
   -- resubmission (or superseded by a later needs_update request), so
   -- a stale or reused link simply matches nothing.
   add column if not exists resume_token text unique,
-  add column if not exists resume_token_created_at timestamptz;
+  add column if not exists resume_token_created_at timestamptz,
+  -- Counts every time this application has EVER been sent to
+  -- needs_update, across its whole life -- never reset on
+  -- resubmission (that would make the cap meaningless). Enforced in
+  -- update-status.js: once this reaches 2, "Request update" is no
+  -- longer offered for this application -- only Approve or Reject.
+  add column if not exists needs_update_count integer not null default 0;
