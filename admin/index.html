@@ -1949,7 +1949,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       ${detailRow('Bank', banking.bankName === 'Other' ? banking.bankNameOther : banking.bankName)}
       ${detailRow('Account name', banking.accountName)}
       ${detailRow('Account number', banking.accountNumber)}
-      ${detailRow('BVN', banking.bvn)}
+      ${detailRow(isMinorAccount ? "Guardian's BVN" : 'BVN', banking.bvn)}
       ${isMinorAccount ? `
         ${detailRow('Bank branch', banking.bankBranch)}
         ${detailRow('Bank address', banking.bankAddress)}
