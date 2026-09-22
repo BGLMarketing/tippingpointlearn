@@ -36,6 +36,17 @@ module.exports = async (req, res) => {
     return checkExistingCustomer(res, body.checkEmail);
   }
 
+  // Prefill lookup for the "update and resubmit" flow — an applicant
+  // who clicked the resume link admin emailed them (see
+  // sendApplicantNeedsUpdateEmail in brevo.js) after being asked for
+  // needs_update. {resumeLookup: true} with no accountType is treated
+  // as "fetch my existing answers to prefill the wizard", not a
+  // submission. Kept on this same endpoint for the same Vercel
+  // function-cap reason as checkExistingCustomer above.
+  if (body.resumeLookup) {
+    return handleResumeLookup(res, body);
+  }
+
   const { accountType, data, documents } = body;
 
   if (!['individual', 'joint', 'corporate', 'minor'].includes(accountType)) {
@@ -45,43 +56,97 @@ module.exports = async (req, res) => {
   const docs = Array.isArray(documents) ? documents : [];
 
   try {
-    const applicationReference = await generateUniqueReference();
+    // A resubmission carries {resume: {reference, token}} pointing at
+    // the SAME application row created when it was first submitted —
+    // re-validated here independently of handleResumeLookup(), since
+    // that's just what populated the form the applicant is now
+    // posting back. Never trust the client's own applicationId/
+    // accountType for this: both are re-derived from the row the
+    // token actually unlocks.
+    const resumeTarget = body.resume && body.resume.reference && body.resume.token
+      ? await resolveResumeTarget(body.resume.reference, body.resume.token)
+      : null;
+    if (body.resume && !resumeTarget) {
+      return res.status(410).json({ error: 'This update link is invalid or has already been used. Please contact clientservices@bglafrica.com.' });
+    }
+
+    const isResubmission = !!resumeTarget;
+    const applicationId = isResubmission ? resumeTarget.id : null;
+    const applicationReference = isResubmission ? resumeTarget.application_reference : await generateUniqueReference();
     const { applicantName, applicantEmail } = resolveApplicantIdentity(accountType, data || {});
 
-    const { data: appRow, error: appErr } = await supabase
-      .from('account_opening_applications')
-      .insert({
-        application_reference: applicationReference,
-        account_type: accountType,
-        status: 'submitted',
-        referred_by: data?.account?.referredBy || null,
-        banking_details: data?.banking || {},
-        next_of_kin_info: data?.nextOfKin || {},
-        applicant_name: applicantName,
-        applicant_email: applicantEmail
-      })
-      .select()
-      .single();
-    if (appErr) throw appErr;
+    const applicationFields = {
+      account_type: accountType,
+      status: 'submitted',
+      referred_by: data?.account?.referredBy || null,
+      banking_details: data?.banking || {},
+      next_of_kin_info: data?.nextOfKin || {},
+      applicant_name: applicantName,
+      applicant_email: applicantEmail
+    };
 
-    const applicationId = appRow.id;
+    let appRow;
+    if (isResubmission) {
+      // Clears the needs_update fields and one-time token as part of
+      // the same update that puts it back in front of Client Service —
+      // a used link must never work twice.
+      const { data: updated, error: updateErr } = await supabase
+        .from('account_opening_applications')
+        .update({
+          ...applicationFields,
+          needs_update_note: null,
+          needs_update_at: null,
+          needs_update_by: null,
+          resume_token: null,
+          resume_token_created_at: null
+        })
+        .eq('id', applicationId)
+        .select()
+        .single();
+      if (updateErr) throw updateErr;
+      appRow = updated;
+
+      // Full replace rather than a diff/merge — the wizard always
+      // sends its complete current state (existing answers the
+      // applicant didn't touch, plus whatever they changed), so the
+      // old rows for this application are simply superseded, same as
+      // how a fresh submission has never needed to merge with anything.
+      const { error: delApplicantsErr } = await supabase.from('applicants').delete().eq('application_id', applicationId);
+      if (delApplicantsErr) throw delApplicantsErr;
+      const { error: delDocsErr } = await supabase.from('application_documents').delete().eq('application_id', applicationId);
+      if (delDocsErr) throw delDocsErr;
+      if (accountType === 'corporate') {
+        const { error: delCorpErr } = await supabase.from('corporate_profiles').delete().eq('application_id', applicationId);
+        if (delCorpErr) throw delCorpErr;
+      }
+    } else {
+      const { data: inserted, error: appErr } = await supabase
+        .from('account_opening_applications')
+        .insert({ application_reference: applicationReference, ...applicationFields })
+        .select()
+        .single();
+      if (appErr) throw appErr;
+      appRow = inserted;
+    }
+
+    const realApplicationId = appRow.id;
     const tasks = [];
 
     const applicantRows = [];
     if (accountType === 'individual' || accountType === 'joint') {
-      applicantRows.push(buildApplicantRow(applicationId, 'primary', data?.primary));
+      applicantRows.push(buildApplicantRow(realApplicationId, 'primary', data?.primary));
     }
     if (accountType === 'joint') {
-      applicantRows.push(buildApplicantRow(applicationId, 'joint_partner', data?.jointPartner));
+      applicantRows.push(buildApplicantRow(realApplicationId, 'joint_partner', data?.jointPartner));
     }
     if (accountType === 'corporate') {
-      applicantRows.push(buildApplicantRow(applicationId, 'signatory_1', data?.signatory1));
+      applicantRows.push(buildApplicantRow(realApplicationId, 'signatory_1', data?.signatory1));
       // Signatory 2 is optional — some corporate accounts only need
       // one authorised signatory. Only create a database record for
       // them if the applicant actually said "Yes" to having one,
       // rather than inserting an empty phantom row every time.
       if (data?.signatory2 && data.signatory2.hasSecondSignatory === 'Yes') {
-        applicantRows.push(buildApplicantRow(applicationId, 'signatory_2', data.signatory2));
+        applicantRows.push(buildApplicantRow(realApplicationId, 'signatory_2', data.signatory2));
       }
     }
     if (accountType === 'minor') {
@@ -92,8 +157,8 @@ module.exports = async (req, res) => {
       // The guardian's row is where the real indemnity/risk-
       // disclosure acceptance lives (they're the one signing), plus
       // their employment/financial fields folded into personal_info.
-      applicantRows.push(buildApplicantRow(applicationId, 'minor', data?.minor));
-      applicantRows.push(buildApplicantRow(applicationId, 'guardian', data?.guardian));
+      applicantRows.push(buildApplicantRow(realApplicationId, 'minor', data?.minor));
+      applicantRows.push(buildApplicantRow(realApplicationId, 'guardian', data?.guardian));
     }
     if (applicantRows.length) {
       tasks.push(
@@ -106,7 +171,7 @@ module.exports = async (req, res) => {
     if (accountType === 'corporate') {
       tasks.push(
         supabase.from('corporate_profiles').insert({
-          application_id: applicationId,
+          application_id: realApplicationId,
           company_info: data?.company || {}
         }).then(({ error }) => {
           if (error) throw error;
@@ -116,7 +181,7 @@ module.exports = async (req, res) => {
 
     if (docs.length) {
       const documentRows = docs.map((d) => ({
-        application_id: applicationId,
+        application_id: realApplicationId,
         applicant_role: d.person,
         document_type: d.docKey,
         file_name: d.fileName,
@@ -133,11 +198,12 @@ module.exports = async (req, res) => {
 
     tasks.push(
       supabase.from('application_status_history').insert({
-        application_id: applicationId,
+        application_id: realApplicationId,
         status: 'submitted',
-        changed_by: 'system'
+        changed_by: 'system',
+        reason: isResubmission ? 'Resubmitted by applicant after an update was requested.' : null
       }).then(({ error }) => {
-        if (error) throw error;
+        if (error) console.error('application_status_history insert failed:', error);
       })
     );
 
@@ -149,7 +215,7 @@ module.exports = async (req, res) => {
         accountType,
         applicantName,
         applicantEmail,
-        applicationId,
+        applicationId: realApplicationId,
         fileCount: docs.length
       }),
       applicantEmail
@@ -161,7 +227,7 @@ module.exports = async (req, res) => {
       });
     });
 
-    return res.status(200).json({ applicationReference, applicationId });
+    return res.status(200).json({ applicationReference, applicationId: realApplicationId });
   } catch (err) {
     console.error('submit-application error:', err);
     return res.status(500).json({
@@ -187,6 +253,25 @@ function buildApplicantRow(applicationId, role, personData) {
     indemnity_accepted_at: indemnityAccepted ? new Date().toISOString() : null,
     risk_disclosure_accepted: !!riskDisclosureAccepted,
     risk_disclosure_accepted_at: riskDisclosureAccepted ? (riskDisclosureAcceptedAt || new Date().toISOString()) : null
+  };
+}
+
+// Reverses buildApplicantRow() above, for handleResumeLookup() —
+// reconstructs the wizard's per-person state shape from a stored
+// applicants row exactly the way it was originally collected.
+function applicantRowToState(row) {
+  if (!row) return {};
+  const info = row.personal_info || {};
+  const pep = row.pep_info || {};
+  return {
+    ...info,
+    pep: pep.pep,
+    pepRole: pep.pepRole,
+    pepRelated: pep.pepRelated,
+    pepRelation: pep.pepRelation,
+    indemnityAccepted: !!row.indemnity_accepted,
+    riskDisclosureAccepted: !!row.risk_disclosure_accepted,
+    riskDisclosureAcceptedAt: row.risk_disclosure_accepted_at || undefined
   };
 }
 
@@ -234,6 +319,85 @@ async function generateUniqueReference() {
     if (!data) return candidate;
   }
   return `BGL-${datePart}-${Date.now().toString().slice(-6)}`;
+}
+
+// Looks up an application by reference and validates the resume token
+// against it — used both to serve the prefill data (handleResumeLookup)
+// and, independently, to authorize an actual resubmission. A token only
+// ever matches while the application is still sitting at needs_update;
+// once resubmitted the token is cleared, so a stale/reused link fails
+// this the same way a wrong one would.
+async function resolveResumeTarget(reference, token) {
+  if (!reference || !token) return null;
+  const { data, error } = await supabase
+    .from('account_opening_applications')
+    .select('*')
+    .eq('application_reference', reference)
+    .eq('status', 'needs_update')
+    .maybeSingle();
+  if (error) {
+    console.error('resolveResumeTarget lookup failed:', error);
+    return null;
+  }
+  if (!data || !data.resume_token || data.resume_token !== token) return null;
+  return data;
+}
+
+async function handleResumeLookup(res, body) {
+  const reference = (body.reference || '').trim();
+  const token = (body.token || '').trim();
+
+  try {
+    const appRow = await resolveResumeTarget(reference, token);
+    if (!appRow) {
+      return res.status(410).json({ error: 'This update link is invalid or has already been used. Please contact clientservices@bglafrica.com.' });
+    }
+
+    const [{ data: applicants }, { data: corp }, { data: docs }] = await Promise.all([
+      supabase.from('applicants').select('*').eq('application_id', appRow.id),
+      supabase.from('corporate_profiles').select('*').eq('application_id', appRow.id).maybeSingle(),
+      supabase.from('application_documents').select('*').eq('application_id', appRow.id)
+    ]);
+
+    const byRole = {};
+    (applicants || []).forEach((a) => { byRole[a.applicant_role] = a; });
+
+    const state = {
+      primary: applicantRowToState(byRole.primary),
+      jointPartner: applicantRowToState(byRole.joint_partner),
+      signatory1: applicantRowToState(byRole.signatory_1),
+      signatory2: byRole.signatory_2
+        ? applicantRowToState(byRole.signatory_2)
+        : { hasSecondSignatory: 'No' },
+      minor: applicantRowToState(byRole.minor),
+      guardian: applicantRowToState(byRole.guardian),
+      company: (corp && corp.company_info) || {},
+      banking: appRow.banking_details || {},
+      nextOfKin: appRow.next_of_kin_info || {},
+      account: { referredBy: appRow.referred_by || '' },
+      files: {}
+    };
+    (docs || []).forEach((d) => {
+      if (!state.files[d.applicant_role]) state.files[d.applicant_role] = {};
+      state.files[d.applicant_role][d.document_type] = {
+        path: d.storage_path,
+        fileName: d.file_name,
+        fileType: d.file_type,
+        fileSize: d.file_size
+      };
+    });
+
+    return res.status(200).json({
+      applicationId: appRow.id,
+      applicationReference: appRow.application_reference,
+      accountType: appRow.account_type,
+      needsUpdateNote: appRow.needs_update_note || '',
+      state
+    });
+  } catch (err) {
+    console.error('handleResumeLookup error:', err);
+    return res.status(500).json({ error: 'Something went wrong loading your application. Please try again.' });
+  }
 }
 
 async function checkExistingCustomer(res, email) {

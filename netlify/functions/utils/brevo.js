@@ -241,6 +241,33 @@ async function sendApplicantOpenedEmail({ applicantEmail, applicantName, applica
   });
 }
 
+async function sendApplicantNeedsUpdateEmail({ applicantEmail, applicantName, applicationReference, note, resumeToken }) {
+  const resumeUrl = `${BRAND.siteUrl}/open-account?resume=${encodeURIComponent(applicationReference)}&token=${encodeURIComponent(resumeToken)}`;
+
+  const body = `
+    <h2 style="font-size:18px; margin:0 0 16px; color:${BRAND.green};">We need a bit more from you</h2>
+    <p style="font-size:14px; color:${BRAND.ink}; margin:0 0 12px;">Hi ${applicantName || 'there'},</p>
+    <p style="font-size:14px; color:${BRAND.ink}; line-height:1.6; margin:0 0 12px;">
+      We've reviewed your BGL account opening request and need you to update something before we can continue.
+    </p>
+    <p style="font-size:14px; color:${BRAND.muted}; margin:0 0 4px;">Application reference</p>
+    <p style="font-size:15px; font-weight:bold; color:${BRAND.ink}; margin:0 0 16px;">${applicationReference}</p>
+    <p style="font-size:14px; color:${BRAND.muted}; margin:0 0 4px;">What needs to change</p>
+    <p style="font-size:14px; color:${BRAND.ink}; line-height:1.6; margin:0 0 16px;">${note}</p>
+    <p style="font-size:14px; color:${BRAND.ink}; line-height:1.6;">Use the button below to pick up your application exactly where you left off — everything you already entered is saved, you only need to fix what's noted above.</p>
+    ${button('Update my application', resumeUrl)}
+    <p style="font-size:12px; color:${BRAND.muted}; line-height:1.6; margin-top:16px;">This link is unique to your application and can only be used once. If you weren't expecting this email, please contact clientservices@bglafrica.com.</p>
+  `;
+
+  const html = wrapEmail('We need a bit more information to continue your BGL application', body);
+
+  return sendEmail({
+    to: applicantEmail,
+    subject: 'Action Needed: Update Your BGL Account Opening Request',
+    html
+  });
+}
+
 async function sendApplicantRejectedEmail({ applicantEmail, applicantName, applicationReference, reason }) {
   const body = `
     <h2 style="font-size:18px; margin:0 0 16px; color:${BRAND.green};">Update on your application</h2>
@@ -290,6 +317,7 @@ module.exports = {
   sendApplicantConfirmationEmail,
   sendApplicantUnderReviewEmail,
   sendApplicantOpenedEmail,
+  sendApplicantNeedsUpdateEmail,
   sendApplicantRejectedEmail,
   sendReferralOtpEmail
 };

@@ -27,7 +27,7 @@ module.exports = async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('account_opening_applications')
-      .select('application_reference, status, submitted_at, opened_at, chn, rejected_at, rejection_reason, applicant_email')
+      .select('application_reference, status, submitted_at, opened_at, chn, rejected_at, rejection_reason, needs_update_note, applicant_email')
       .eq('application_reference', reference)
       .maybeSingle();
 
@@ -44,7 +44,12 @@ module.exports = async (req, res) => {
       openedAt: data.opened_at,
       chn: data.chn,
       rejectedAt: data.rejected_at,
-      rejectionReason: data.rejection_reason
+      rejectionReason: data.rejection_reason,
+      // The resume TOKEN is deliberately never returned here — it only
+      // ever travels via the emailed link (see sendApplicantNeedsUpdateEmail),
+      // so tracking (a much weaker reference+email check) can't be used
+      // to reconstruct a working resume URL.
+      needsUpdateNote: data.needs_update_note
     });
   } catch (err) {
     console.error('track-application error:', err);
