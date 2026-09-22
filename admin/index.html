@@ -851,7 +851,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
         <div class="stats-row cols-3">
           <div class="stat-card">
-            <div class="stat-label">Submitted</div>
+            <div class="stat-label">Awaiting Client Service review</div>
             <div class="stat-value" id="stat-submitted">—</div>
           </div>
           <div class="stat-card">
@@ -1040,10 +1040,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <div id="admins-panel" hidden>
       <p style="font-size:14px; color:rgba(22,36,26,0.65); margin-bottom:20px; line-height:1.55;">
         Every Supabase Auth user below can sign in to this dashboard. Assigning a role here controls which
-        account-opening review actions they're allowed to take — Client Service has no approve/reject step,
-        Compliance handles both review stages before account opening, and Account Opening marks applications
-        opened or rejects them at that final stage. Unassigned admins can still view everything, just can't act
-        on the review pipeline.
+        account-opening review actions they're allowed to take — Client Service approves or rejects a newly
+        submitted application, Compliance handles both review stages before account opening, and Account Opening
+        marks applications opened or rejects them at that final stage. Unassigned admins can still view everything,
+        just can't act on the review pipeline.
       </p>
       <table class="article-table">
         <thead>
@@ -1706,13 +1706,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     document.getElementById('stat-rejected').textContent = rejected;
     document.getElementById('stat-pending').textContent = rows.length - opened - rejected;
 
-    // Submitted = nobody's opened it yet (opening one auto-advances it,
-    // see viewApplication()). under_review_client_service and
-    // under_review_compliance are both Compliance's stage, shown as one
-    // combined "Awaiting Compliance review" bucket since admin sees them
-    // as a single continuous review, not two separate ones. Legacy
-    // 'under_review' rows (pre-two-stage-pipeline) aren't counted in any
-    // of these three — they still show up in Total/Pending above.
+    // under_review_client_service and under_review_compliance are both
+    // Compliance's stage, shown as one combined "Awaiting Compliance
+    // review" bucket since admin sees them as a single continuous
+    // review, not two separate ones. Legacy 'under_review' rows
+    // (pre-two-stage-pipeline) aren't counted in any of these three —
+    // they still show up in Total/Pending above.
     document.getElementById('stat-submitted').textContent = count('submitted');
     document.getElementById('stat-awaiting-compliance').textContent = count('under_review_client_service') + count('under_review_compliance');
     document.getElementById('stat-awaiting-account-opening').textContent = count('account_opening_in_progress');
@@ -1790,21 +1789,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     if(appErr || !app){
       detailView.innerHTML = `<p style="color:#b3452f;">Could not load this application.</p><button class="link-btn" onclick="backToList()">← Back to list</button>`;
       return;
-    }
-
-    // Auto-advance a freshly-submitted application the moment any admin
-    // opens it — this is what actually starts the review clock (see
-    // APPLICATION_TRANSITION_RULES in update-status.js: this specific
-    // transition needs no role, unlike every other one). There's no
-    // manual approve/reject button at 'submitted' on purpose.
-    if(app.status === 'submitted'){
-      try{
-        await callStatusUpdate({ applicationId: id, newStatus: 'under_review_client_service' });
-        app.status = 'under_review_client_service';
-      } catch(err){
-        console.error('Auto-advancing to review failed:', err);
-        // Not fatal — just render with whatever status it actually is.
-      }
     }
 
     currentApplication = app;
@@ -2041,6 +2025,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   // real role before allowing any transition, so a stale or tampered copy
   // of this here can't let anyone actually skip a review stage.
   const REQUIRED_ROLE_BY_STATUS = {
+    submitted: 'client_service',
     under_review_client_service: 'compliance',
     under_review_compliance: 'compliance',
     account_opening_in_progress: 'account_opening',
@@ -2051,14 +2036,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     let buttons = '';
     const requiredRole = REQUIRED_ROLE_BY_STATUS[app.status];
 
-    // 'submitted' has no manual approve/reject -- opening the
-    // application (see viewApplication()) auto-advances it to
-    // under_review_client_service, which is what actually starts the
-    // review clock. Nothing to render here.
-
     if(requiredRole && !isSuperAdmin() && currentAdminRole !== requiredRole){
       const roleLabel = ADMIN_ROLE_LABELS[requiredRole];
       buttons += `<p style="font-size:13px; color:rgba(22,36,26,0.55); margin:0;">Awaiting a ${roleLabel} reviewer${currentAdminRole ? '' : ' — your admin account has no role assigned yet'}.</p>`;
+    } else if(app.status === 'submitted'){
+      buttons += `
+        <button class="btn btn-primary" onclick="advanceToClientServiceReview('${app.id}')">Approve</button>
+        <button class="btn btn-ghost" style="color:#b3452f; border-color:#b3452f;" onclick="openRejectModal('${app.id}')">Reject</button>
+      `;
     } else if(app.status === 'under_review_client_service'){
       buttons += `
         <button class="btn btn-primary" onclick="advanceToCompliance('${app.id}')">Approve</button>
@@ -2170,6 +2155,15 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     if(!res.ok) throw new Error(result.error || 'Something went wrong.');
     return result;
   }
+
+  window.advanceToClientServiceReview = async function(id){
+    try{
+      await callStatusUpdate({ applicationId: id, newStatus: 'under_review_client_service' });
+      await viewApplication(id);
+    } catch(err){
+      alert(err.message);
+    }
+  };
 
   window.advanceToCompliance = async function(id){
     try{

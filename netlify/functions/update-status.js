@@ -23,21 +23,19 @@ const APPLICATION_TRANSITIONS = ['under_review_client_service', 'under_review_co
 const IPO_TRANSITIONS = ['payment_confirmed', 'payment_unconfirmed', 'pending_execution', 'executed', 'allotted'];
 
 // Which status an application can move to from its CURRENT status, and
-// which admin role is required to make that move. `null` means any
-// logged-in admin (no role needed) -- currently only true for the very
-// first step, which happens automatically the moment any admin opens a
-// newly-submitted application (see viewApplication() in admin/index.html),
-// not through a manual approve/reject click.
+// which admin role is required to make that move. Every stage requires
+// an explicit approve or reject click from the role that owns it --
+// simply opening/viewing an application never changes its status.
 //
 // under_review_client_service and under_review_compliance are BOTH
 // "Compliance's" stage in the UI (displayed identically as "Under
 // Compliance review") -- Compliance clicks Approve twice to walk an
 // application through both internal statuses on the way to
-// account_opening_in_progress. Client Service has no approve/reject
-// gate at all under this design.
+// account_opening_in_progress.
 const APPLICATION_TRANSITION_RULES = {
   submitted: {
-    under_review_client_service: null
+    under_review_client_service: 'client_service',
+    rejected: 'client_service'
   },
   under_review_client_service: {
     under_review_compliance: 'compliance',
