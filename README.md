@@ -268,6 +268,39 @@ page like `/faq` or `/waitlist`.
     pipeline's first stage (`under_review_client_service`) rather than
     leaving them on the legacy one-step fallback indefinitely — safe to
     re-run, and logs the move in each application's status history.
+    A `needs_update` status is reachable from every stage that can
+    reject (`submitted`, both `under_review_*` statuses, and
+    `account_opening_in_progress`), gated to that same stage's role —
+    it's a softer alternative to rejecting outright, for something
+    specific and fixable rather than a hard no. Setting it requires a
+    note (min. 10 characters) explaining what needs to change, and
+    generates a single-use `resume_token` emailed to the applicant
+    (`sendApplicantNeedsUpdateEmail`) as a link to
+    `/open-account?resume=<reference>&token=<token>`. That link
+    fetches the applicant's existing answers (`{resumeLookup: true}`
+    on `submit-application.js`, reversing `buildApplicantRow()` back
+    into the wizard's `state` shape) and drops them straight on the
+    Review step, admin's note shown at the top — the applicant fixes
+    whatever's wrong via that step's existing per-section "Edit" links
+    and resubmits. Resubmitting (`{resume: {reference, token}}` in the
+    normal submit payload) updates the SAME application row in place —
+    same id, same reference, no duplicate record — clears the token and
+    needs_update fields, and returns it to `submitted`, restarting the
+    review pipeline from the top. A used or stale token matches nothing
+    (`resolveResumeTarget()` requires `status = 'needs_update'` AND an
+    exact token match), so a link can't be replayed after its
+    application has already moved on. The resume token is deliberately
+    never exposed via `/track-application` (a much weaker reference +
+    email check) — only the note is; the actual link only ever travels
+    through the email. Admin also sees the note and, as a fallback if
+    the email didn't land, the resume link itself in the application's
+    detail view (every admin already has full read access to every
+    other field there regardless of role, so this isn't a new class of
+    exposure). Run `supabase/migration_needs_update_status.sql` once
+    (after `schema.sql` and `migration_admin_roles.sql`) to add the
+    status value and the `needs_update_note` / `needs_update_at` /
+    `needs_update_by` / `resume_token` / `resume_token_created_at`
+    columns this depends on.
     The admin page never writes these tables
     directly — only that function does, using the service role key, so
     the emails and audit trail can't be bypassed by calling Supabase

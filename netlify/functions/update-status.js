@@ -1,8 +1,10 @@
+const crypto = require('crypto');
 const { supabase } = require('./utils/supabaseClient');
 const {
   sendApplicantUnderReviewEmail,
   sendApplicantOpenedEmail,
-  sendApplicantRejectedEmail
+  sendApplicantRejectedEmail,
+  sendApplicantNeedsUpdateEmail
 } = require('./utils/brevo');
 const {
   sendIpoPaymentConfirmedEmail,
@@ -19,7 +21,7 @@ const {
 // tables — this file shares just the admin auth check and otherwise
 // keeps each handler's logic unchanged, dispatching on `domain`.
 
-const APPLICATION_TRANSITIONS = ['under_review_client_service', 'under_review_compliance', 'account_opening_in_progress', 'opened', 'rejected'];
+const APPLICATION_TRANSITIONS = ['under_review_client_service', 'under_review_compliance', 'account_opening_in_progress', 'needs_update', 'opened', 'rejected'];
 const IPO_TRANSITIONS = ['payment_confirmed', 'payment_unconfirmed', 'pending_execution', 'executed', 'allotted'];
 
 // Which status an application can move to from its CURRENT status, and
@@ -32,21 +34,29 @@ const IPO_TRANSITIONS = ['payment_confirmed', 'payment_unconfirmed', 'pending_ex
 // Compliance review") -- Compliance clicks Approve twice to walk an
 // application through both internal statuses on the way to
 // account_opening_in_progress.
+// needs_update is reachable from every stage that can reject, gated to
+// the SAME role that stage's reject already requires -- "ask the
+// applicant to fix something" is just a softer alternative to
+// rejecting outright, not a separate permission.
 const APPLICATION_TRANSITION_RULES = {
   submitted: {
     under_review_client_service: 'client_service',
+    needs_update: 'client_service',
     rejected: 'client_service'
   },
   under_review_client_service: {
     under_review_compliance: 'compliance',
+    needs_update: 'compliance',
     rejected: 'compliance'
   },
   under_review_compliance: {
     account_opening_in_progress: 'compliance',
+    needs_update: 'compliance',
     rejected: 'compliance'
   },
   account_opening_in_progress: {
     opened: 'account_opening',
+    needs_update: 'account_opening',
     rejected: 'account_opening'
   },
   // Legacy rows still sitting at the old single-stage 'under_review'
@@ -55,6 +65,7 @@ const APPLICATION_TRANSITION_RULES = {
   // state rather than leaving them permanently stuck.
   under_review: {
     opened: 'account_opening',
+    needs_update: 'account_opening',
     rejected: 'account_opening'
   }
 };
@@ -240,6 +251,9 @@ async function handleApplicationStatus(adminEmail, body) {
   if (newStatus === 'rejected' && (!rejectionReason || rejectionReason.trim().length < 10)) {
     return jsonResponse(400, { error: 'A rejection reason of at least 10 characters is required.' });
   }
+  if (newStatus === 'needs_update' && (!adminNote || adminNote.trim().length < 10)) {
+    return jsonResponse(400, { error: 'A note of at least 10 characters explaining what needs to change is required.' });
+  }
 
   try {
     const { data: appRow, error: fetchErr } = await supabase
@@ -289,6 +303,17 @@ async function handleApplicationStatus(adminEmail, body) {
       // Compliance has approved — this just marks the handoff to
       // account opening itself. No new fields to set; the status
       // change and the status-history row are the record of it.
+    } else if (newStatus === 'needs_update') {
+      // A fresh, single-use token every time -- if this application
+      // was previously sent an update request and ignored, that old
+      // link (and its now-stale prefill data) is implicitly invalidated
+      // the moment a new one is issued, since only the LATEST token is
+      // ever stored against the row.
+      update.resume_token = crypto.randomBytes(24).toString('hex');
+      update.resume_token_created_at = new Date().toISOString();
+      update.needs_update_note = adminNote.trim();
+      update.needs_update_at = new Date().toISOString();
+      update.needs_update_by = adminEmail;
     } else if (newStatus === 'opened') {
       update.opened_at = new Date().toISOString();
       update.opened_by = adminEmail;
@@ -338,6 +363,14 @@ async function handleApplicationStatus(adminEmail, body) {
           // clearance to the account-opening step itself), not
           // something the applicant needs a separate email about.
           // They'll hear from us once it's actually opened.
+        } else if (newStatus === 'needs_update') {
+          await sendApplicantNeedsUpdateEmail({
+            applicantEmail: appRow.applicant_email,
+            applicantName: appRow.applicant_name,
+            applicationReference: appRow.application_reference,
+            note: update.needs_update_note,
+            resumeToken: update.resume_token
+          });
         } else if (newStatus === 'opened') {
           await sendApplicantOpenedEmail({
             applicantEmail: appRow.applicant_email,

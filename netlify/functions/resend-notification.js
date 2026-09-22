@@ -3,6 +3,7 @@ const {
   sendApplicantConfirmationEmail,
   sendApplicantUnderReviewEmail,
   sendApplicantOpenedEmail,
+  sendApplicantNeedsUpdateEmail,
   sendApplicantRejectedEmail
 } = require('./utils/brevo');
 
@@ -63,8 +64,17 @@ exports.handler = async (event) => {
       case 'submitted':
         await sendApplicantConfirmationEmail(common);
         break;
+      // Legacy pre-two-stage-pipeline status; under_review_client_service
+      // is its modern equivalent and sends the same email.
       case 'under_review':
+      case 'under_review_client_service':
         await sendApplicantUnderReviewEmail(common);
+        break;
+      case 'needs_update':
+        if (!appRow.resume_token) {
+          return jsonResponse(400, { error: 'This application has no active resume link on file.' });
+        }
+        await sendApplicantNeedsUpdateEmail({ ...common, note: appRow.needs_update_note, resumeToken: appRow.resume_token });
         break;
       case 'opened':
         if (!appRow.chn || !appRow.csc_account_number) {

@@ -448,6 +448,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
     <!-- WIZARD -->
     <div id="aowWizard" style="display:none;">
+      <div id="aowResumeNote" style="display:none; background:#fdf3e2; border:1px solid #e2a040; border-radius:10px; padding:14px 16px; margin-bottom:20px; font-size:13.5px; line-height:1.55; color:var(--ink);">
+        <strong>We need one more thing from you.</strong>
+        <p id="aowResumeNoteText" style="margin:6px 0 0;"></p>
+      </div>
       <div class="aow-rail" id="aowRail"></div>
       <div class="aow-rail-label" id="aowRailLabel"></div>
       <form id="aowForm" onsubmit="return false;">
@@ -756,6 +760,12 @@ const state = {
 let steps = [];
 let currentStep = 0;
 
+// Set only when this session was opened via an emailed "update your
+// application" link (see tryResumeFromLink()) -- carries what submit
+// needs to update the EXISTING application row in place instead of
+// creating a new one, plus admin's note shown at the top of the wizard.
+let resumeContext = null;
+
 /* ============================================================
    PERSISTENCE
    Mobile browsers frequently reload the tab (freeing memory) when a
@@ -771,7 +781,7 @@ const PERSIST_KEY = 'aow_wizard_state_v1';
 
 function persistState(){
   try{
-    sessionStorage.setItem(PERSIST_KEY, JSON.stringify({ state, currentStep }));
+    sessionStorage.setItem(PERSIST_KEY, JSON.stringify({ state, currentStep, resumeContext }));
   } catch(e){ /* storage unavailable/full — not critical, fail silently */ }
 }
 
@@ -784,6 +794,7 @@ function restoreState(){
     Object.assign(state, saved.state);
     steps = buildSteps(state.accountType);
     currentStep = Math.min(saved.currentStep || 0, steps.length - 1);
+    resumeContext = saved.resumeContext || null;
     return true;
   } catch(e){ return false; }
 }
@@ -835,10 +846,61 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024;        // 5MB per file
 const MAX_TOTAL_FILE_SIZE = 25 * 1024 * 1024; // 25MB combined across all documents
 let activeUploads = 0;
 
+// An admin "update requested" email links back here as
+// /open-account?resume=<reference>&token=<token> — fetches the
+// applicant's existing answers and drops them straight on the Review
+// step (reusing its existing per-section "Edit" links as the natural
+// way to jump to and fix whatever's wrong), rather than making them
+// re-enter everything or click through the whole wizard again.
+async function tryResumeFromLink(reference, resumeToken){
+  try{
+    const res = await fetch('/api/submit-application', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resumeLookup: true, reference, token: resumeToken })
+    });
+    const result = await res.json();
+    if(!res.ok || !result.state) return false;
+
+    Object.assign(state, result.state);
+    state.accountType = result.accountType;
+    resumeContext = { reference: result.applicationReference, token: resumeToken };
+
+    document.getElementById('aowEntry').style.display = 'none';
+    document.getElementById('aowWizard').style.display = 'block';
+    if(result.needsUpdateNote){
+      document.getElementById('aowResumeNoteText').textContent = result.needsUpdateNote;
+      document.getElementById('aowResumeNote').style.display = 'block';
+    }
+    steps = buildSteps(state.accountType);
+    currentStep = steps.length - 1; // land on Review & submit
+    renderStep();
+    persistState();
+    return true;
+  } catch(e){
+    return false;
+  }
+}
+
 // Silently resume an in-progress application if one was interrupted
 // (e.g. a mobile reload during a file upload) — skip the entry screen
 // entirely and land right back where the applicant left off.
-(function tryResume(){
+(async function tryResume(){
+  const urlParams = new URLSearchParams(window.location.search);
+  const resumeRef = urlParams.get('resume');
+  const resumeToken = urlParams.get('token');
+
+  if(resumeRef && resumeToken){
+    const resumed = await tryResumeFromLink(resumeRef, resumeToken);
+    if(resumed) return;
+    // Invalid/expired link — fall through to the normal entry screen
+    // rather than silently failing; showSuccess()-style messaging isn't
+    // right here since nothing was submitted, so this just lets the
+    // applicant start fresh or contact support per the link's own
+    // "invalid or expired" wording they'd have seen if this were a
+    // direct API call.
+  }
+
   if(restoreState()){
     document.getElementById('aowEntry').style.display = 'none';
     document.getElementById('aowWizard').style.display = 'block';
@@ -847,7 +909,6 @@ let activeUploads = 0;
   // A referral code arriving via a shared link (e.g. /open-account?ref=TEMI2026)
   // takes priority even over a resumed session's existing value —
   // clicking a link is an explicit signal.
-  const urlParams = new URLSearchParams(window.location.search);
   const refParam = urlParams.get('ref');
   if(refParam){
     if(!state.account) state.account = {};
@@ -2021,6 +2082,10 @@ async function submitApplication(){
     },
     documents
   };
+  // Present only when this session started from an emailed "update your
+  // application" link — tells the backend to update the EXISTING
+  // application row (same reference) instead of creating a new one.
+  if(resumeContext) payload.resume = resumeContext;
 
   try{
     const res = await fetch('/api/submit-application', {

@@ -715,6 +715,22 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     document.getElementById('resRef').textContent = data.applicationReference;
     document.getElementById('resSubmitted').textContent = new Date(data.submittedAt).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
 
+    // needs_update doesn't fit the linear step tracker below -- it's a
+    // detour, not forward progress, and showing "which step reached"
+    // would be misleading here. The actual resume link only ever
+    // travels via email (never returned by this lookup, which is a
+    // much weaker reference+email check), so this just points the
+    // applicant at their inbox rather than trying to reproduce it.
+    if(data.status === 'needs_update'){
+      document.getElementById('statusSteps').innerHTML = `<div class="review-group"><h4>Status</h4>
+        <p style="font-size:14px; color:rgba(22,36,26,0.8); line-height:1.6; margin:0 0 12px;">
+          <strong>We need a bit more from you.</strong> Check the email we sent for a secure link back into your application — everything you already entered is saved, you'll only need to fix what's noted there.
+        </p>
+        ${data.needsUpdateNote ? `<p style="font-size:13.5px; color:rgba(22,36,26,0.7); line-height:1.6;">${escapeHtml(data.needsUpdateNote)}</p>` : ''}
+      </div>`;
+      return;
+    }
+
     // Mirrors the pipeline in update-status.js's APPLICATION_TRANSITION_RULES:
     // submitted -> under_review_client_service -> under_review_compliance
     // -> account_opening_in_progress -> opened. under_review_client_service
