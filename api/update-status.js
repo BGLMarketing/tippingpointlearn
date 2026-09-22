@@ -208,12 +208,16 @@ async function handleEditReferredBy(res, adminEmail, body) {
     // constraint tying it to the status CHECK list — reusing it here
     // keeps every change to an application in one place admin already
     // looks at, rather than a separate audit log nobody checks.
-    await supabase.from('application_status_history').insert({
+    const { error: historyErr } = await supabase.from('application_status_history').insert({
       application_id: applicationId,
       status: 'referred_by_updated',
       changed_by: adminEmail,
       reason: `Changed from "${oldValue || '(none)'}" to "${newValue || '(none)'}" — ${reason.trim()}`
     });
+    // Logged, not thrown -- the referred_by change itself already
+    // succeeded, and failing the whole request here would make the UI
+    // report an error despite the actual edit having gone through.
+    if (historyErr) console.error('application_status_history insert failed (referred_by_updated):', historyErr);
 
     return res.status(200).json({ ok: true, referredBy: newValue });
   } catch (err) {
@@ -303,12 +307,18 @@ async function handleApplicationStatus(res, adminEmail, body) {
       .eq('id', applicationId);
     if (updateErr) throw updateErr;
 
-    await supabase.from('application_status_history').insert({
+    // Logged, not thrown -- the status change above already succeeded
+    // and the applicant-facing outcome shouldn't hinge on the audit
+    // row, but a silent failure here previously meant a status could
+    // change with no record of it at all (see the account-opening
+    // detail view's "Status history" list).
+    const { error: historyErr } = await supabase.from('application_status_history').insert({
       application_id: applicationId,
       status: newStatus,
       changed_by: adminEmail,
       reason: newStatus === 'rejected' ? rejectionReason : (adminNote || null)
     });
+    if (historyErr) console.error('application_status_history insert failed:', historyErr);
 
     if (appRow.applicant_email) {
       try {
@@ -391,12 +401,13 @@ async function handleIpoStatus(res, adminEmail, body) {
       .eq('id', subscriptionId);
     if (updateErr) throw updateErr;
 
-    await supabase.from('ipo_subscription_status_history').insert({
+    const { error: historyErr } = await supabase.from('ipo_subscription_status_history').insert({
       subscription_id: subscriptionId,
       status: newStatus,
       changed_by: adminEmail,
       note: note || null
     });
+    if (historyErr) console.error('ipo_subscription_status_history insert failed:', historyErr);
 
     if (subRow.applicant_email) {
       try {
