@@ -887,6 +887,17 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           </div>
         </div>
 
+        <div class="stats-row" style="grid-template-columns:repeat(2, 1fr);">
+          <div class="stat-card">
+            <div class="stat-label">New applications</div>
+            <div class="stat-value" id="stat-apptype-new">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Reactivations</div>
+            <div class="stat-value" id="stat-apptype-reactivation">—</div>
+          </div>
+        </div>
+
         <div class="filter-row">
           <div class="field">
             <label for="app-status-filter">Status</label>
@@ -1702,6 +1713,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
      ============================================================ */
   let currentApplication = null;
   let currentApplicationsList = []; // for CSV export — whatever's currently filtered/displayed
+  let currentMatchedCustomer = null; // existing_bgl_customers row matched to the currently viewed application, if any
 
   async function loadApplicationsSummary(){
     // Deliberately ignores the status/search filters below — these
@@ -1711,9 +1723,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     const statIds = [
       'stat-total', 'stat-opened', 'stat-rejected', 'stat-pending',
       'stat-submitted', 'stat-awaiting-compliance', 'stat-awaiting-account-opening', 'stat-needs-update',
-      'stat-type-individual', 'stat-type-joint', 'stat-type-corporate', 'stat-type-minor'
+      'stat-type-individual', 'stat-type-joint', 'stat-type-corporate', 'stat-type-minor',
+      'stat-apptype-new', 'stat-apptype-reactivation'
     ];
-    const { data, error } = await sb.from('account_opening_applications').select('status, account_type');
+    const { data, error } = await sb.from('account_opening_applications').select('status, account_type, application_type');
     if(error){
       statIds.forEach(id => { document.getElementById(id).textContent = '—'; });
       return;
@@ -1743,6 +1756,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     document.getElementById('stat-type-joint').textContent = countByType('joint');
     document.getElementById('stat-type-corporate').textContent = countByType('corporate');
     document.getElementById('stat-type-minor').textContent = countByType('minor');
+
+    // application_type is a required field going forward, but rows
+    // submitted before this column existed default to 'new' at the DB
+    // level, so treating anything that isn't explicitly 'reactivation'
+    // as 'new' here stays consistent with that backfilled default.
+    document.getElementById('stat-apptype-new').textContent = rows.filter(r => r.application_type !== 'reactivation').length;
+    document.getElementById('stat-apptype-reactivation').textContent = rows.filter(r => r.application_type === 'reactivation').length;
   }
 
   async function loadApplications(){
@@ -1786,7 +1806,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       return `<tr>
         <td style="font-family:'IBM Plex Mono', monospace; font-size:12.5px;">${escapeHtml(a.application_reference)}</td>
         <td>${escapeHtml(a.applicant_name || '—')}</td>
-        <td style="text-transform:capitalize;">${escapeHtml(a.account_type)}</td>
+        <td style="text-transform:capitalize;">${escapeHtml(a.account_type)}${a.application_type === 'reactivation' ? ' <span class="status-pill" style="text-transform:none; background:rgba(226,160,64,0.16); color:#8a5c1e;">Reactivation</span>' : ''}</td>
         <td>${date}</td>
         <td><span class="status-pill status-${a.status}">${accountStatusLabel(a.status)}</span></td>
         <td>${escapeHtml(a.chn || '—')}</td>
@@ -1815,6 +1835,18 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     }
 
     currentApplication = app;
+
+    // Set server-side at submission time (see findExistingCustomerId in
+    // submit-application.js) whenever the applicant's email matched
+    // someone already on file in existing_bgl_customers — independent of
+    // what they answered for "New / Reactivation" above, so this can
+    // also catch someone who picked "New" by mistake.
+    let matchedCustomer = null;
+    if(app.existing_customer_id){
+      const { data: matched } = await sb.from('existing_bgl_customers').select('*').eq('id', app.existing_customer_id).maybeSingle();
+      matchedCustomer = matched || null;
+    }
+    currentMatchedCustomer = matchedCustomer;
 
     // The referrer's own email (from referral_codes), not the
     // applicant's — the applicant's email is already shown further
@@ -2023,6 +2055,17 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           <div class="detail-actions">${actions}</div>
         </div>
         ${detailRow('Account type', capitalize(app.account_type))}
+        ${detailRow('Application type', app.application_type === 'reactivation' ? 'Reactivation of dormant account' : 'New account')}
+        ${matchedCustomer ? `
+          <div class="detail-row" style="background:rgba(226,160,64,0.12); border-radius:8px; padding:12px 14px; margin:6px 0; align-items:flex-start;">
+            <span style="font-weight:600; color:#8a5c1e;">Matches existing customer</span>
+            <span style="font-size:13px; line-height:1.6;">
+              ${escapeHtml(matchedCustomer.name || '—')}${matchedCustomer.chn ? ` · CHN ${escapeHtml(matchedCustomer.chn)}` : ''}${matchedCustomer.cscs ? ` · CSCS ${escapeHtml(matchedCustomer.cscs)}` : ''}<br>
+              ${matchedCustomer.account_officer ? `Account officer: ${escapeHtml(matchedCustomer.account_officer)}` : 'No account officer on file'}
+              <br><span style="color:rgba(22,36,26,0.6);">Found by matching this applicant's email against existing_bgl_customers — confirm before reusing the CHN/CSCS below.</span>
+            </span>
+          </div>
+        ` : ''}
         <div class="detail-row"><span>Referred by</span><span>${escapeHtml(app.referred_by || '—')} <button class="link-btn" style="font-size:11px;" onclick="openEditReferredByModal('${app.id}', '${escapeHtml(app.referred_by || '')}')">Edit</button></span></div>
         ${app.referred_by ? detailRow("Referrer's email", referrerEmail) : ''}
         ${detailRow('Submitted', new Date(app.submitted_at).toLocaleString())}
@@ -2252,8 +2295,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
   window.openOpenedModal = function(id){
     currentApplication = { id };
-    document.getElementById('opened-chn').value = '';
-    document.getElementById('opened-csc').value = '';
+    // Pre-fill from the matched existing_bgl_customers record when this
+    // application was flagged as a reactivation match — currentMatchedCustomer
+    // is set by viewApplication() for whichever application is currently
+    // open, which is always this one (the button only exists on the
+    // detail view). Admin can still edit/clear these before confirming.
+    document.getElementById('opened-chn').value = (currentMatchedCustomer && currentMatchedCustomer.chn) || '';
+    document.getElementById('opened-csc').value = (currentMatchedCustomer && currentMatchedCustomer.cscs) || '';
     document.getElementById('opened-note').value = '';
     document.getElementById('opened-modal-status').textContent = '';
     document.getElementById('openedModalOverlay').classList.add('open');

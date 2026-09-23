@@ -1023,12 +1023,15 @@ function emailField(prefix,key,label,required,checkDuplicate){
   // applicant, corporate's company email), not every email field in
   // the wizard (a joint partner or corporate signatory can
   // legitimately already have their own separate personal account).
+  // Purely informational (see checkForExistingCustomer) — it never
+  // blocks submission, since dormant customers are expected to submit
+  // this exact form to reactivate.
   const fieldId = `${prefix}_${key}_field`;
   return `<div class="field">
     <label>${label}${required?'<span class="req">*</span>':''}</label>
-    <input type="email" data-field="${prefix}.${key}" ${required?'data-required="true"':''} ${checkDuplicate ? `id="${fieldId}" onblur="checkForExistingCustomer(this)" oninput="this.dataset.duplicateBlocked=''; document.getElementById('${fieldId}_warning').style.display='none';"` : ''}>
+    <input type="email" data-field="${prefix}.${key}" ${required?'data-required="true"':''} ${checkDuplicate ? `id="${fieldId}" onblur="checkForExistingCustomer(this)" oninput="document.getElementById('${fieldId}_warning').style.display='none';"` : ''}>
     <div class="err-msg">Enter a valid email address.</div>
-    ${checkDuplicate ? `<div class="dup-warning" id="${fieldId}_warning" style="display:none; margin-top:8px; padding:10px 12px; background:rgba(179,69,47,0.08); border:1px solid rgba(179,69,47,0.3); border-radius:8px; font-size:13px; color:#b3452f; line-height:1.5;"></div>` : ''}
+    ${checkDuplicate ? `<div class="dup-warning" id="${fieldId}_warning" style="display:none; margin-top:8px; padding:10px 12px; background:rgba(226,160,64,0.1); border:1px solid rgba(226,160,64,0.4); border-radius:8px; font-size:13px; color:#8a5c1e; line-height:1.5;"></div>` : ''}
   </div>`;
 }
 function telField(prefix,key,label,required){
@@ -1659,6 +1662,7 @@ function reviewStepHtml(){
 
   html += reviewGroup('Account type', [
     ['Type', capitalize(f.accountType)],
+    ['Application type', f.account && f.account.applicationType === 'reactivation' ? 'Reactivating an existing account' : 'New account'],
     ['Referred by / Relationship Manager', f.account ? f.account.referredBy : '']
   ]);
 
@@ -1774,7 +1778,17 @@ function typeStepHtml(){
         <div><h3>${t.title}</h3><p>${t.desc}</p></div>
         <div class="type-check"></div>
       </div>`).join('')}
-  </div>`;
+  </div>
+  <fieldset style="margin-top:28px;">
+    <legend>Application type</legend>
+    <div class="field" data-radio-group="account.applicationType">
+      <label>Is this a new account, or are you reactivating an existing/dormant BGL account?<span class="req">*</span></label>
+      <div class="radio-row">
+        <label class="radio-opt"><input type="radio" name="account_applicationType" value="new" data-field-radio="account.applicationType"> New account</label>
+        <label class="radio-opt"><input type="radio" name="account_applicationType" value="reactivation" data-field-radio="account.applicationType"> Reactivating an existing account</label>
+      </div>
+    </div>
+  </fieldset>`;
 }
 
 /* ---------- step config ---------- */
@@ -1895,7 +1909,6 @@ async function checkForExistingCustomer(input){
   const warningEl = document.getElementById(input.id + '_warning');
   warningEl.style.display = 'none';
   warningEl.textContent = '';
-  input.dataset.duplicateBlocked = '';
 
   // Don't bother checking an empty or obviously-malformed address —
   // the field's own required/format validation already covers that;
@@ -1911,12 +1924,16 @@ async function checkForExistingCustomer(input){
     });
     const result = await res.json();
     if(result && result.exists){
-      warningEl.textContent = 'This email already has a BGL account. Please contact clientservices@bglgroup.ng.';
+      // Informational only, never blocking — dormant customers are
+      // expected to submit this exact form to reactivate, so a match
+      // here is entirely normal, not disqualifying. What actually
+      // routes admin to reactivate instead of opening a new account is
+      // the "Application type" question on step 1, not this check —
+      // this just nudges anyone who picked "New" by mistake.
+      warningEl.textContent = (state.account && state.account.applicationType === 'reactivation')
+        ? 'We found an existing BGL record matching this email — that lines up with reactivating an existing account.'
+        : "We found an existing BGL account matching this email. If this is your account, go back to Step 1 and choose \"Reactivating an existing account\" as your application type.";
       warningEl.style.display = 'block';
-      input.dataset.duplicateBlocked = 'true';
-      const fieldWrap = input.closest('.field');
-      if(fieldWrap) fieldWrap.classList.add('invalid');
-      updateNextButtonState();
     }
   } catch(err){
     // Fail silently on the frontend too, matching the backend's
@@ -1949,17 +1966,7 @@ function collectStep(){
     const digits = el.dataset.digits;
     const formatOk = !digits || !val || new RegExp(`^\\d{${digits}}$`).test(val);
 
-    // An email flagged by checkForExistingCustomer() as already
-    // belonging to a BGL account blocks progress the same way a
-    // malformed BVN does — it's never acceptable to proceed with,
-    // regardless of whether the field is otherwise "required". Only
-    // applies while the flagged value is still what's actually typed
-    // in the box — editing it after the fact clears the flag (see
-    // checkForExistingCustomer's oninput handler) rather than leaving
-    // a stale block on a since-corrected value.
-    const isDuplicateBlocked = el.dataset.duplicateBlocked === 'true';
-
-    if((isRequired && empty) || (isVisible && !formatOk) || (isVisible && isDuplicateBlocked)){
+    if((isRequired && empty) || (isVisible && !formatOk)){
       valid = false;
       if(fieldWrap) fieldWrap.classList.add('invalid');
     } else if(fieldWrap){
@@ -2017,18 +2024,24 @@ function goNext(){
   const errorEl = document.getElementById('aowSubmitError');
   if(errorEl) errorEl.style.display = 'none';
 
-  if(stepId === 'type'){
-    if(!state.accountType){ alert('Please choose an account type to continue.'); return; }
-  } else {
-    const ok = collectStep();
-    if(!ok){
-      if(errorEl){
-        errorEl.textContent = 'Please complete all required fields and attach all required documents before continuing.';
-        errorEl.style.display = 'block';
-      }
-      window.scrollTo({top: document.getElementById('aowWizard').offsetTop - 100, behavior:'smooth'});
-      return;
+  if(stepId === 'type' && !state.accountType){
+    alert('Please choose an account type to continue.');
+    return;
+  }
+  // Runs on every step including 'type' now -- the account-type cards
+  // themselves aren't [data-field]/[data-radio-group] elements (they're
+  // handled directly by selectType()), so collectStep() only ever
+  // touches the new "Application type" radio group there, validating
+  // it the same way every other required field on every other step
+  // already is.
+  const ok = collectStep();
+  if(!ok){
+    if(errorEl){
+      errorEl.textContent = 'Please complete all required fields and attach all required documents before continuing.';
+      errorEl.style.display = 'block';
     }
+    window.scrollTo({top: document.getElementById('aowWizard').offsetTop - 100, behavior:'smooth'});
+    return;
   }
 
   if(currentStep === steps.length - 1){

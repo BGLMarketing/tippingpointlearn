@@ -104,29 +104,45 @@ page like `/faq` or `/waitlist`.
   usable error body). Per-file cap is 5MB, 25MB combined per
   application — now just a sane UX/cost limit, not a hard platform
   constraint.
-- **Duplicate-account check**: the primary applicant's email
-  (individual/joint) and the company email (corporate) are checked
-  against existing BGL customers as soon as the field loses focus —
-  if a match is found, a warning appears ("This email already has a
-  BGL account. Please contact clientservices@bglgroup.ng.") and that
-  step can't be continued past until the email is changed. Checked
-  against two sources: `existing_bgl_customers` (accounts opened
-  outside this system, imported via `supabase/import_existing_customers.sql`
-  — run `supabase/migration_existing_customers.sql` first to create
-  the table) and any application already at `status = 'opened'` in
-  this system itself (a pending/in-review application doesn't count
-  as "having an account" yet, so those are deliberately not matched).
-  Not every email field in the wizard triggers this — a joint
-  partner or corporate signatory can legitimately already have their
-  own separate personal account, so only the actual account-holder
-  identity's email is checked. Implemented as a `{checkEmail: '...'}`
-  dispatch on `submit-application.js` rather than a new endpoint, to
-  stay under Vercel Hobby's serverless function cap (already broke
-  production twice this session at just 10-11 functions). The check
-  "fails open" on any error, both server- and client-side — a broken
-  lookup should never block a legitimate applicant from submitting,
-  worst case a genuine duplicate slips through and gets caught by
-  admin during review instead of at the form.
+- **Application type (New / Reactivation) and existing-customer
+  matching**: dormant BGL customers are expected to go through this
+  same /open-account form to reactivate, so a matching email no
+  longer blocks submission — it used to, which meant admin was
+  opening brand-new accounts for people who already had one on file
+  instead of reactivating theirs. Two independent signals now handle
+  this (`supabase/migration_customer_reactivation.sql`):
+  1. **`application_type`** — a required "New account / Reactivating
+     an existing account" question asked upfront, on the wizard's
+     very first step, regardless of what the applicant's email
+     matches. Shown on the review step and in the admin applications
+     list/detail view.
+  2. **`existing_customer_id`** — set automatically server-side (never
+     trusted from the client) whenever the primary applicant's email
+     (individual/joint) or company email (corporate) matches a row in
+     `existing_bgl_customers` (accounts opened outside this system,
+     imported via `supabase/import_existing_customers.sql` — run
+     `supabase/migration_existing_customers.sql` first to create the
+     table) or an application already at `status = 'opened'` in this
+     system. The field just loses its blocking behavior on the client
+     side now — a matching email shows a non-blocking amber note
+     instead of a red error, worded differently depending on which
+     `application_type` was chosen. Not every email field in the
+     wizard triggers this check — a joint partner or corporate
+     signatory can legitimately already have their own separate
+     personal account, so only the actual account-holder identity's
+     email is checked.
+
+  Admin sees the match as an amber "Matches existing customer" banner
+  on the application detail view (name, CHN/CSCS, account officer,
+  from `existing_bgl_customers`) and the "Mark as opened" modal
+  pre-fills CHN/CSCS Account Number from that matched record — admin
+  still confirms/edits before saving, this is never applied
+  automatically. Implemented as a `{checkEmail: '...'}` dispatch on
+  `submit-application.js` rather than a new endpoint, to stay under
+  Vercel Hobby's serverless function cap (already broke production
+  twice this session at just 10-11 functions). The check "fails open"
+  on any error, both server- and client-side — a broken lookup should
+  never block a legitimate applicant from submitting.
 - **Minor account type** — built from BGL's separate Minors KYC form
   (a genuinely different document, not a variant of the adult one).
   Four extra wizard steps beyond the type selection: the minor's own
