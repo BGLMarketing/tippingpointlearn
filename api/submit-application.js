@@ -75,6 +75,20 @@ module.exports = async (req, res) => {
     const applicationReference = isResubmission ? resumeTarget.application_reference : await generateUniqueReference();
     const { applicantName, applicantEmail } = resolveApplicantIdentity(accountType, data || {});
 
+    // existing_customer_id is recomputed server-side from the
+    // applicant's own resolved email, never trusted from the client --
+    // a SYSTEM-DETECTED match against BGL's imported customer list,
+    // independent of what the applicant declared below. application_type
+    // is the applicant's own explicit, required declaration (asked
+    // upfront on the wizard's first step, regardless of whether their
+    // email happens to match anything on file) -- together these catch
+    // both "the system recognizes this email" and "the applicant knows
+    // they're reactivating even from a new email", so admin can
+    // reactivate the existing account instead of unknowingly opening a
+    // duplicate one.
+    const existingCustomerId = await findExistingCustomerId(applicantEmail);
+    const applicationType = data?.account?.applicationType === 'reactivation' ? 'reactivation' : 'new';
+
     const applicationFields = {
       account_type: accountType,
       status: 'submitted',
@@ -82,7 +96,9 @@ module.exports = async (req, res) => {
       banking_details: data?.banking || {},
       next_of_kin_info: data?.nextOfKin || {},
       applicant_name: applicantName,
-      applicant_email: applicantEmail
+      applicant_email: applicantEmail,
+      existing_customer_id: existingCustomerId,
+      application_type: applicationType
     };
 
     let appRow;
@@ -397,6 +413,32 @@ async function handleResumeLookup(res, body) {
   } catch (err) {
     console.error('handleResumeLookup error:', err);
     return res.status(500).json({ error: 'Something went wrong loading your application. Please try again.' });
+  }
+}
+
+// Used at actual submission time to link an application to BGL's
+// imported customer list (see checkExistingCustomer below for the
+// live-typing version of this same lookup, used only for the
+// wizard's non-blocking "you may already have an account" prompt).
+// Deliberately email-only for now, same limitation as that check —
+// a dormant customer using a different email than what's on file
+// won't be caught. Fails open (returns null) rather than blocking a
+// real submission over a lookup hiccup.
+async function findExistingCustomerId(email) {
+  const trimmed = (email || '').trim();
+  if (!trimmed || trimmed.length > 254 || !EMAIL_PATTERN.test(trimmed)) return null;
+  try {
+    const { data, error } = await supabase
+      .from('existing_bgl_customers')
+      .select('id')
+      .ilike('email', trimmed)
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? data.id : null;
+  } catch (err) {
+    console.error('findExistingCustomerId failed:', err);
+    return null;
   }
 }
 
