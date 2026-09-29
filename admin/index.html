@@ -2066,7 +2066,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             </span>
           </div>
         ` : ''}
-        <div class="detail-row"><span>Referred by</span><span>${escapeHtml(app.referred_by || '—')} <button class="link-btn" style="font-size:11px;" onclick="openEditReferredByModal('${app.id}', '${escapeHtml(app.referred_by || '')}')">Edit</button></span></div>
+        <div class="detail-row"><span>Referred by</span><span>${escapeHtml(app.referred_by || '—')} ${(isSuperAdmin() || currentAdminRole === 'compliance') ? `<button class="link-btn" style="font-size:11px;" onclick="openEditReferredByModal('${app.id}', '${escapeHtml(app.referred_by || '')}')">Edit</button>` : ''}</span></div>
         ${app.referred_by ? detailRow("Referrer's email", referrerEmail) : ''}
         ${detailRow('Submitted', new Date(app.submitted_at).toLocaleString())}
         ${app.chn ? detailRow('CHN', app.chn) : ''}

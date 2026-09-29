@@ -189,6 +189,18 @@ async function handleAdminRoles(res, adminEmail, body) {
 async function handleEditReferredBy(res, adminEmail, body) {
   const { applicationId, referredBy, reason } = body;
 
+  // Referral crediting has real payout/commission implications, so
+  // editing it after submission is restricted to the super admin and
+  // Compliance -- the same role that already owns rejecting/approving
+  // at every review stage -- rather than being open to any logged-in
+  // admin as it was before.
+  if (adminEmail.toLowerCase() !== SUPER_ADMIN_EMAIL) {
+    const callerRole = await getAdminRole(adminEmail);
+    if (callerRole !== 'compliance') {
+      return res.status(403).json({ error: 'Only Compliance or the super admin can edit the referred-by field.' });
+    }
+  }
+
   if (!applicationId) {
     return res.status(400).json({ error: 'applicationId is required.' });
   }
