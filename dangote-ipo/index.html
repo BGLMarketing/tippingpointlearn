@@ -914,6 +914,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <div class="dip-hero-fact"><span class="num">₦525</span><span class="lbl">Per Unit</span></div>
         <div class="dip-hero-fact"><span class="num">14 Sept 2026</span><span class="lbl">Offer Opened</span></div>
         <div class="dip-hero-fact"><span class="num">50,000</span><span class="lbl">Minimum Units</span></div>
+        <div class="dip-hero-fact"><span class="num" id="ipoCountdownNum">—</span><span class="lbl" id="ipoCountdownLbl">Days Left to Subscribe</span></div>
       </div>
       <div class="dip-hero-actions">
         <button class="btn btn-gold" data-ipo-subscribe-btn hidden onclick="location.href='/dangote-ipo/subscribe'">Subscribe to the IPO</button>
@@ -1592,6 +1593,43 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     document.querySelectorAll('[data-ipo-notify-btn]').forEach(el => { el.hidden = isOpen; });
   }
   updateIpoOfferState();
+
+  // Subscriptions close 13 October 2026 (WAT). The hero countdown is
+  // calendar-day based, not a raw millisecond division -- a visitor
+  // loading the page at any time on 7 Oct should see "6", not "5" or
+  // "7" depending on their clock, and it should tick down by exactly 1
+  // at WAT midnight each day with no redeploy needed. If the official
+  // closing date ever changes, update this constant (and the prose
+  // wherever the date is stated).
+  const IPO_OFFER_CLOSES_ON = new Date('2026-10-13T00:00:00+01:00');
+
+  function watCalendarDayUtc(date){
+    const watShifted = new Date(date.getTime() + 60 * 60 * 1000); // WAT = UTC+1
+    return Date.UTC(watShifted.getUTCFullYear(), watShifted.getUTCMonth(), watShifted.getUTCDate());
+  }
+
+  function updateIpoCountdown(){
+    const numEl = document.getElementById('ipoCountdownNum');
+    const lblEl = document.getElementById('ipoCountdownLbl');
+    if(!numEl || !lblEl) return;
+
+    const daysLeft = Math.round((watCalendarDayUtc(IPO_OFFER_CLOSES_ON) - watCalendarDayUtc(new Date())) / 86400000);
+
+    if(daysLeft > 1){
+      numEl.textContent = daysLeft;
+      lblEl.textContent = 'Days Left to Subscribe';
+    } else if(daysLeft === 1){
+      numEl.textContent = '1';
+      lblEl.textContent = 'Day Left to Subscribe';
+    } else if(daysLeft === 0){
+      numEl.textContent = 'Today';
+      lblEl.textContent = 'Last Day to Subscribe';
+    } else {
+      numEl.textContent = 'Closed';
+      lblEl.textContent = 'Offer Has Closed';
+    }
+  }
+  updateIpoCountdown();
 
   /* ---------- notify me modal ---------- */
   function openNotifyModal(){
