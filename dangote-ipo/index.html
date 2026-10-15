@@ -910,6 +910,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div class="eyebrow">Now open</div>
       <h1>Own a Piece of the Dangote Refinery IPO</h1>
       <p class="lead">Africa's largest single-train refinery is heading toward one of the biggest public listings in the continent's history. Here's how to take part, through Tipping Point.</p>
+      <div class="dip-badge-row" style="margin-bottom:22px;">
+        <span class="dip-badge">Deadline extended — now closes 27 Oct 2026</span>
+      </div>
       <div class="dip-hero-facts">
         <div class="dip-hero-fact"><span class="num">₦525</span><span class="lbl">Per Unit</span></div>
         <div class="dip-hero-fact"><span class="num">14 Sept 2026</span><span class="lbl">Offer Opened</span></div>
@@ -965,11 +968,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <p>The Dangote Petroleum Refinery & Petrochemicals complex, built in the Lekki Free Trade Zone in Lagos, is the world's largest single-train oil refinery — a project that's already reshaped Nigeria's fuel supply since it began operations in 2024.</p>
       <p>The company, part of the Dangote Group, is going public through an Initial Public Offering (IPO) on the Nigerian Exchange (NGX) — one of the largest public listings in African history, with a portion of the company's equity being floated to raise capital for further expansion.</p>
       <p>The offer opened <strong>14 September 2026</strong> at <strong>₦525 per unit</strong>, with a minimum subscription of 50,000 units (₦26,250,000), in multiples of 10 units thereafter. You can subscribe directly through Tipping Point, powered by BGL Securities.</p>
+      <p>The subscription window has been <strong>extended by 14 days</strong> and now closes <strong>27 October 2026</strong> — if you haven't subscribed yet, there's still time.</p>
       <p class="dip-note">Figures above reflect the official offer terms. Read the full prospectus for complete details before subscribing.</p>
     </div>
     <div class="dip-stat-grid">
       <div class="dip-stat"><span class="num">₦525</span><span class="lbl">Price per Unit</span></div>
       <div class="dip-stat"><span class="num">14 Sept 2026</span><span class="lbl">Offer Opened</span></div>
+      <div class="dip-stat"><span class="num">27 Oct 2026</span><span class="lbl">Offer Closes (Extended)</span></div>
       <div class="dip-stat"><span class="num">50,000</span><span class="lbl">Minimum Units</span></div>
       <div class="dip-stat"><span class="num">NGX</span><span class="lbl">Target Listing</span></div>
     </div>
@@ -1159,7 +1164,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div class="faq-item">
         <button class="faq-q"><span><span class="qnum">03</span>Has the IPO officially opened?</span><span class="chev">＋</span></button>
         <div class="faq-a"><div class="faq-a-inner">
-          <p>Yes — the offer opened on <strong>14 September 2026</strong>. You can subscribe now directly through Tipping Point.</p>
+          <p>Yes — the offer opened on <strong>14 September 2026</strong>. You can subscribe now directly through Tipping Point. The subscription window has been extended and now closes <strong>27 October 2026</strong>.</p>
         </div></div>
       </div>
 
@@ -1281,6 +1286,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <button class="faq-q"><span><span class="qnum">17</span>Who can I contact for assistance?</span><span class="chev">＋</span></button>
         <div class="faq-a"><div class="faq-a-inner">
           <p>For further enquiries or assistance with account opening, CSCS registration, or the subscription process, please contact our 24/7 helpline on <a href="tel:+2349154966790">09154966790</a>, and one of our representatives will assist you through the process.</p>
+        </div></div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-q"><span><span class="qnum">18</span>Has the subscription deadline been extended?</span><span class="chev">＋</span></button>
+        <div class="faq-a"><div class="faq-a-inner">
+          <p>Yes. The subscription window originally scheduled to close on 13 October 2026 has been <strong>extended by 14 days</strong> and now closes on <strong>27 October 2026</strong>. If you haven't subscribed yet, you can still do so through Tipping Point before then.</p>
         </div></div>
       </div>
 
@@ -1594,14 +1606,17 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   }
   updateIpoOfferState();
 
-  // Subscriptions close 13 October 2026 (WAT). The hero countdown is
+  // Subscriptions close 27 October 2026 (WAT) -- extended 14 days from
+  // the original 13 October deadline. The hero countdown is
   // calendar-day based, not a raw millisecond division -- a visitor
-  // loading the page at any time on 7 Oct should see "6", not "5" or
-  // "7" depending on their clock, and it should tick down by exactly 1
-  // at WAT midnight each day with no redeploy needed. If the official
-  // closing date ever changes, update this constant (and the prose
-  // wherever the date is stated).
-  const IPO_OFFER_CLOSES_ON = new Date('2026-10-13T00:00:00+01:00');
+  // loading the page at any time on a given day should see a stable
+  // whole number regardless of their clock, and it should tick down by
+  // exactly 1 at WAT midnight each day with no redeploy needed. If the
+  // official closing date ever changes again, update this constant
+  // (and the prose wherever the date is stated: the hero badge, the
+  // "What is the Dangote Refinery IPO?" section, the stat grid, and
+  // the FAQ).
+  const IPO_OFFER_CLOSES_ON = new Date('2026-10-27T00:00:00+01:00');
 
   function watCalendarDayUtc(date){
     const watShifted = new Date(date.getTime() + 60 * 60 * 1000); // WAT = UTC+1
