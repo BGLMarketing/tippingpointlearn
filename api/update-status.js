@@ -122,12 +122,11 @@ module.exports = async (req, res) => {
 
   if (body.domain === 'ipo') return handleIpoStatus(res, adminEmail, body);
   if (body.domain === 'admin_roles') return handleAdminRoles(res, adminEmail, body);
-  if (body.domain === 'agent') return handleAgentReview(res, adminEmail, body);
   if (body.domain === 'account') {
     if (body.action === 'edit_referred_by') return handleEditReferredBy(res, adminEmail, body);
     return handleApplicationStatus(res, adminEmail, body);
   }
-  return res.status(400).json({ error: "domain must be 'account', 'ipo', 'admin_roles', or 'agent'." });
+  return res.status(400).json({ error: "domain must be 'account', 'ipo', or 'admin_roles'." });
 };
 
 async function handleAdminRoles(res, adminEmail, body) {
@@ -488,111 +487,4 @@ async function handleIpoStatus(res, adminEmail, body) {
     console.error('update-status (ipo) error:', err);
     return res.status(500).json({ error: 'Something went wrong updating the subscription. Please try again.' });
   }
-}
-
-// ---- Referral agent applications ----
-// Approving an agent creates their referral code and sets their
-// commission rate, which has payout implications -- so, like editing
-// referred-by, it is limited to Compliance and the super admin.
-async function handleAgentReview(res, adminEmail, body) {
-  const { sendAgentApprovedEmail, sendAgentRejectedEmail } = require('../lib/brevo');
-
-  if (adminEmail.toLowerCase() !== SUPER_ADMIN_EMAIL) {
-    const callerRole = await getAdminRole(adminEmail);
-    if (callerRole !== 'compliance') {
-      return res.status(403).json({ error: 'Only Compliance or the super admin can review agent applications.' });
-    }
-  }
-
-  const { applicationId, action } = body;
-  if (!applicationId || !['approve', 'reject'].includes(action)) {
-    return res.status(400).json({ error: "applicationId and action ('approve' or 'reject') are required." });
-  }
-
-  const { data: app, error: appErr } = await supabase
-    .from('agent_applications')
-    .select('*')
-    .eq('id', applicationId)
-    .maybeSingle();
-  if (appErr || !app) return res.status(404).json({ error: 'Application not found.' });
-  if (app.status !== 'submitted') {
-    return res.status(409).json({ error: `This application has already been ${app.status}.` });
-  }
-
-  const now = new Date().toISOString();
-
-  if (action === 'reject') {
-    const reason = String(body.reason || '').trim().slice(0, 500) || null;
-    const { error } = await supabase
-      .from('agent_applications')
-      .update({ status: 'rejected', rejection_reason: reason, reviewed_by: adminEmail, reviewed_at: now })
-      .eq('id', app.id)
-      .eq('status', 'submitted');
-    if (error) {
-      console.error('agent reject failed:', error);
-      return res.status(500).json({ error: 'Could not reject this application.' });
-    }
-    let emailSent = false;
-    try {
-      await sendAgentRejectedEmail({ email: app.email, name: app.full_name, reason });
-      emailSent = true;
-    } catch (err) {
-      console.error('agent rejection email failed:', err);
-    }
-    return res.status(200).json({ ok: true, emailSent });
-  }
-
-  // approve
-  const pct = body.commissionPct === undefined || body.commissionPct === '' ? 0.25 : Number(body.commissionPct);
-  if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
-    return res.status(400).json({ error: 'Commission must be a percentage between 0 and 100.' });
-  }
-  const code = String(body.code || '').trim().toUpperCase();
-  if (!/^[A-Z0-9-]{3,20}$/.test(code)) {
-    return res.status(400).json({ error: 'Codes can only use letters, numbers and hyphens, and must be 3-20 characters.' });
-  }
-
-  const { data: taken } = await supabase.from('referral_codes').select('id').ilike('code', code).maybeSingle();
-  if (taken) return res.status(409).json({ error: 'That code is already in use. Choose another.' });
-
-  const { data: codeRow, error: codeErr } = await supabase
-    .from('referral_codes')
-    .insert({
-      agent_name: app.full_name,
-      code,
-      email: app.email,
-      phone: app.phone,
-      commission_pct: pct,
-      is_active: true,
-      application_id: app.id,
-      created_by: adminEmail
-    })
-    .select('id')
-    .single();
-  if (codeErr) {
-    console.error('agent code insert failed:', codeErr);
-    return res.status(500).json({ error: 'Could not create the referral code.' });
-  }
-
-  const { error: updErr } = await supabase
-    .from('agent_applications')
-    .update({ status: 'approved', commission_pct: pct, referral_code: code, reviewed_by: adminEmail, reviewed_at: now })
-    .eq('id', app.id)
-    .eq('status', 'submitted');
-  if (updErr) {
-    console.error('agent approve update failed:', updErr);
-    // Roll back the code so a retry starts clean.
-    await supabase.from('referral_codes').delete().eq('id', codeRow.id);
-    return res.status(500).json({ error: 'Could not approve this application.' });
-  }
-
-  let emailSent = false;
-  try {
-    await sendAgentApprovedEmail({ email: app.email, name: app.full_name, code, commissionPct: pct });
-    await supabase.from('agent_applications').update({ approval_email_sent: true }).eq('id', app.id);
-    emailSent = true;
-  } catch (err) {
-    console.error('agent approval email failed:', err);
-  }
-  return res.status(200).json({ ok: true, code, commissionPct: pct, emailSent });
 }

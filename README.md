@@ -745,11 +745,3 @@ if this project is still on Vercel Hobby. `find api -type f -not -path
 copy of each file must stay in sync either way (see "Runs on Netlify
 or Vercel" above) — Netlify has no equivalent function-count cap, so
 this constraint is Vercel-specific.
-
-## Referral agent onboarding
-
-- **Public form:** `/agent` (`agent/index.html`). Collects name, email, phone, state, occupation, who they'd refer, expected referrals and consent. BVN and bank details are deliberately not collected until an agent is approved.
-- **Submission:** `POST /api/create-referral-code` with `{ action: 'apply', ... }` (dispatched inside the existing function to stay under Vercel Hobby's function cap). Saves to `agent_applications`, emails the applicant a confirmation and alerts all admins.
-- **Review:** Admin → Referral codes → Agent applications. Compliance or the super admin can approve (choose the code, set commission %, default 0.25) or reject with an optional reason. Handled by `update-status` with `domain: 'agent'`; approving inserts into `referral_codes` and emails the agent their code.
-- **Commission rate:** `referral_codes.commission_pct` (default 0.25, editable per agent from the Rate column). Policy is a % of BGL's brokerage fee on referred clients' trades. Brokerage fees are not in Supabase, so the Commission column still shows the existing IPO-based figure, now using each agent's own rate.
-- Only the Vercel functions in `api/` were updated; the `netlify/functions` copies were not.
