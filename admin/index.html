@@ -575,7 +575,6 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   .status-opened{ background:rgba(51,153,102,0.14); color:var(--green-deep); }
   .status-needs_update{ background:rgba(226,160,64,0.16); border:1px solid rgba(226,160,64,0.4); color:#8a5c1e; }
   .status-rejected{ background:rgba(179,69,47,0.12); color:#b3452f; }
-  .status-approved{ background:rgba(51,153,102,0.14); color:var(--green-deep); }
   .status-payment_pending{ background:var(--paper-dim); border:1px solid var(--line-dark); color:rgba(22,36,26,0.6); }
   .status-payment_confirmed{ background:rgba(51,153,102,0.14); color:var(--green-deep); }
   .status-payment_unconfirmed{ background:rgba(179,69,47,0.12); color:#b3452f; }
@@ -936,29 +935,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
     <div id="referrals-panel" hidden>
       <div class="form-card" style="margin-bottom:24px;">
-        <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:6px;">
-          <h3 style="margin:0;">Agent applications</h3>
-          <select id="agent-app-filter" onchange="loadAgentApplications()" style="font-family:'Inter',sans-serif; font-size:13px; padding:6px 10px; border-radius:8px; border:1px solid var(--line-dark); background:#fff;">
-            <option value="submitted">Awaiting review</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-            <option value="all">All</option>
-          </select>
-        </div>
-        <p style="font-size:13px; color:rgba(22,36,26,0.6); margin:0 0 16px; line-height:1.5;">From the public form at /agent. Approving creates the agent's referral code and emails it to them. Commission defaults to 0.25% of brokerage fees. Compliance or the super admin can review.</p>
-        <div style="overflow-x:auto;">
-          <table class="article-table">
-            <thead>
-              <tr><th>Applicant</th><th>Contact</th><th>State</th><th>Refs / month</th><th>Applied</th><th>Status</th><th></th></tr>
-            </thead>
-            <tbody id="agent-app-table-body">
-              <tr class="empty-row"><td colspan="7">Loading…</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="form-card" style="margin-bottom:24px;">
         <h3>New referral code</h3>
         <form id="referral-form">
           <div class="field-row">
@@ -989,14 +965,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
       <table class="article-table">
         <thead>
-          <tr><th>Agent</th><th>Code</th><th>Email</th><th>Rate</th><th>Accounts opened</th><th>IPO subscribers</th><th>Commission</th><th>Created</th><th></th></tr>
+          <tr><th>Agent</th><th>Code</th><th>Email</th><th>Accounts opened</th><th>IPO subscribers</th><th>Commission</th><th>Created</th><th></th></tr>
         </thead>
         <tbody id="referral-table-body">
-          <tr class="empty-row"><td colspan="9">Loading…</td></tr>
+          <tr class="empty-row"><td colspan="8">Loading…</td></tr>
         </tbody>
         <tfoot>
           <tr id="referral-totals-row" hidden>
-            <td colspan="6" style="text-align:right; font-weight:600;">Total commission owed</td>
+            <td colspan="5" style="text-align:right; font-weight:600;">Total commission owed</td>
             <td id="referral-total-commission" style="font-weight:700;"></td>
             <td colspan="2"></td>
           </tr>
@@ -1661,7 +1637,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     document.getElementById('dashboard-title').textContent = titles[tab];
 
     if(tab === 'applications') loadApplications();
-    if(tab === 'referrals'){ loadReferralCodes(); loadAgentApplications(); }
+    if(tab === 'referrals') loadReferralCodes();
     if(tab === 'ipo'){ loadIpoSubscriptions(); loadIpoPaymentAccount(); }
     if(tab === 'admins') loadAdminRoles();
   };
@@ -2827,15 +2803,15 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     const tbody = document.getElementById('referral-table-body');
     const totalsRow = document.getElementById('referral-totals-row');
     totalsRow.hidden = true;
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="9">Loading…</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Loading…</td></tr>';
 
     const { data: codes, error } = await sb.from('referral_codes').select('*').order('created_at', { ascending: false });
     if(error){
-      tbody.innerHTML = `<tr class="empty-row"><td colspan="9">Error loading codes: ${escapeHtml(error.message)}</td></tr>`;
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="8">Error loading codes: ${escapeHtml(error.message)}</td></tr>`;
       return;
     }
     if(!codes || !codes.length){
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="9">No referral codes yet.</td></tr>';
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="8">No referral codes yet.</td></tr>';
       return;
     }
 
@@ -2882,15 +2858,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       const paidAmount = subs
         .filter(s => IPO_PAID_STATUSES.includes(s.status))
         .reduce((sum, s) => sum + (Number(s.amount_payable) || 0), 0);
-      const ratePct = (c.commission_pct === null || c.commission_pct === undefined) ? REFERRAL_COMMISSION_RATE * 100 : Number(c.commission_pct);
-      const commission = paidAmount * (ratePct / 100);
+      const commission = paidAmount * REFERRAL_COMMISSION_RATE;
       totalCommission += commission;
 
       exportRows.push({
         agent_name: c.agent_name,
         code: c.code,
         email: c.email,
-        commission_pct: ratePct,
         accounts_opened: accountsOpened,
         ipo_subscribers: ipoSubscribers,
         commission,
@@ -2905,7 +2879,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <td>${escapeHtml(c.agent_name)}</td>
         <td style="font-family:'IBM Plex Mono', monospace; font-size:12.5px;">${escapeHtml(c.code)}</td>
         <td style="font-size:13px;">${emailCell}</td>
-        <td style="white-space:nowrap;">${ratePct}%${canReviewAgents() ? ` <button class="link-btn" style="font-size:11px;" onclick="editAgentRate('${c.id}', ${ratePct})">Edit</button>` : ''}</td>
         <td>${accountsOpened}</td>
         <td>${ipoSubscribers}</td>
         <td>${formatNairaAdmin(commission)}</td>
@@ -3001,147 +2974,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       alert(error.message);
       return;
     }
-    await loadReferralCodes();
-  };
-  /* ============================================================
-     AGENT APPLICATIONS (public /agent form)
-     ============================================================ */
-  function canReviewAgents(){ return isSuperAdmin() || currentAdminRole === 'compliance'; }
-  let agentAppsById = {};
-
-  function suggestAgentCode(name){
-    const first = String(name || '').trim().split(/\s+/)[0] || 'AGENT';
-    const base = first.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) || 'AGENT';
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let tail = '';
-    for(let i = 0; i < 4; i++) tail += chars[Math.floor(Math.random() * chars.length)];
-    return `${base}-${tail}`;
-  }
-
-  async function loadAgentApplications(){
-    const tbody = document.getElementById('agent-app-table-body');
-    const filter = document.getElementById('agent-app-filter').value;
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Loading…</td></tr>';
-
-    let q = sb.from('agent_applications').select('*').order('created_at', { ascending: false });
-    if(filter !== 'all') q = q.eq('status', filter);
-    const { data, error } = await q;
-    if(error){
-      tbody.innerHTML = `<tr class="empty-row"><td colspan="7">Error loading applications: ${escapeHtml(error.message)}</td></tr>`;
-      return;
-    }
-    if(!data || !data.length){
-      const empty = filter === 'submitted' ? 'No applications waiting for review.' : 'No applications here yet.';
-      tbody.innerHTML = `<tr class="empty-row"><td colspan="7">${empty}</td></tr>`;
-      return;
-    }
-
-    agentAppsById = {};
-    tbody.innerHTML = data.map(a => {
-      agentAppsById[a.id] = a;
-      const date = new Date(a.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
-      const extra = [a.occupation, a.heard_about ? `Heard via: ${a.heard_about}` : ''].filter(Boolean).map(escapeHtml).join(' · ');
-      let actions = '';
-      if(a.status === 'submitted'){
-        actions = canReviewAgents()
-          ? `<button class="link-btn" onclick="toggleAgentReview('${a.id}')">Review</button>`
-          : '<span style="font-size:12.5px; color:rgba(22,36,26,0.5);">Awaiting Compliance</span>';
-      } else if(a.status === 'approved'){
-        actions = `<span style="font-family:'IBM Plex Mono', monospace; font-size:12px;">${escapeHtml(a.referral_code || '')} · ${Number(a.commission_pct)}%</span>`;
-      } else if(a.rejection_reason){
-        actions = `<span style="font-size:12.5px; color:rgba(22,36,26,0.55);">${escapeHtml(a.rejection_reason)}</span>`;
-      }
-      return `<tr>
-        <td><strong>${escapeHtml(a.full_name)}</strong>${extra ? `<div style="font-size:12.5px; color:rgba(22,36,26,0.55); margin-top:2px;">${extra}</div>` : ''}${a.network_description ? `<div style="font-size:12.5px; color:rgba(22,36,26,0.7); margin-top:4px; max-width:320px;">${escapeHtml(a.network_description)}</div>` : ''}</td>
-        <td style="font-size:13px;">${escapeHtml(a.email)}<br>${escapeHtml(a.phone)}</td>
-        <td>${escapeHtml(a.state || '—')}</td>
-        <td>${escapeHtml(a.expected_referrals || '—')}</td>
-        <td style="white-space:nowrap;">${date}</td>
-        <td><span class="status-pill status-${escapeHtml(a.status)}">${a.status === 'submitted' ? 'Awaiting review' : escapeHtml(a.status)}</span></td>
-        <td class="table-actions">${actions}</td>
-      </tr>
-      <tr id="agent-review-${a.id}" hidden><td colspan="7" style="background:#fff;"></td></tr>`;
-    }).join('');
-  }
-
-  window.loadAgentApplications = loadAgentApplications;
-
-  window.toggleAgentReview = function(id){
-    const row = document.getElementById(`agent-review-${id}`);
-    if(!row) return;
-    if(!row.hidden){ row.hidden = true; return; }
-    const a = agentAppsById[id];
-    row.querySelector('td').innerHTML = `
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px 16px; align-items:end; padding:6px 0;">
-        <div class="field" style="margin:0;">
-          <label for="agent-code-${id}">Referral code</label>
-          <input type="text" id="agent-code-${id}" value="${escapeHtml(suggestAgentCode(a.full_name))}" maxlength="20" style="text-transform:uppercase;">
-        </div>
-        <div class="field" style="margin:0;">
-          <label for="agent-rate-${id}">Commission (% of brokerage fee)</label>
-          <input type="number" id="agent-rate-${id}" value="0.25" min="0" max="100" step="0.01">
-        </div>
-        <div class="form-actions" style="margin:0;">
-          <button class="btn btn-primary" onclick="reviewAgent('${id}', 'approve', this)">Approve and email code</button>
-        </div>
-        <div class="field" style="margin:0;">
-          <label for="agent-reason-${id}">Reason for rejection (sent to applicant, optional)</label>
-          <input type="text" id="agent-reason-${id}" maxlength="500">
-        </div>
-        <div class="form-actions" style="margin:0;">
-          <button class="btn btn-ghost" style="color:#b3452f;" onclick="reviewAgent('${id}', 'reject', this)">Reject</button>
-        </div>
-      </div>
-      <div class="form-status" id="agent-status-${id}"></div>`;
-    row.hidden = false;
-  };
-
-  window.reviewAgent = async function(id, action, btn){
-    const statusEl = document.getElementById(`agent-status-${id}`);
-    statusEl.textContent = '';
-    statusEl.className = 'form-status';
-    const payload = { domain: 'agent', applicationId: id, action };
-    if(action === 'approve'){
-      payload.code = document.getElementById(`agent-code-${id}`).value.trim().toUpperCase();
-      payload.commissionPct = document.getElementById(`agent-rate-${id}`).value;
-    } else {
-      if(!confirm('Reject this application? The applicant will be emailed.')) return;
-      payload.reason = document.getElementById(`agent-reason-${id}`).value.trim();
-    }
-    btn.disabled = true;
-    try{
-      const token = await getAuthToken();
-      const res = await fetch('/api/update-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(payload)
-      });
-      const result = await res.json().catch(() => ({}));
-      if(!res.ok) throw new Error(result.error || 'Something went wrong.');
-      if(result.emailSent === false){
-        alert(action === 'approve'
-          ? `Approved with code ${result.code}, but the email to the agent failed. Please send them their code manually.`
-          : 'Rejected, but the email to the applicant failed.');
-      }
-      await loadAgentApplications();
-      if(action === 'approve') await loadReferralCodes();
-    } catch(err){
-      statusEl.textContent = err.message;
-      statusEl.className = 'form-status error';
-      btn.disabled = false;
-    }
-  };
-
-  window.editAgentRate = async function(id, current){
-    const input = prompt('Commission rate for this agent (% of brokerage fee):', current);
-    if(input === null) return;
-    const pct = Number(String(input).trim());
-    if(!Number.isFinite(pct) || pct < 0 || pct > 100){
-      alert('Enter a percentage between 0 and 100, for example 0.25.');
-      return;
-    }
-    const { error } = await sb.from('referral_codes').update({ commission_pct: pct }).eq('id', id);
-    if(error){ alert(error.message); return; }
     await loadReferralCodes();
   };
 </script>
