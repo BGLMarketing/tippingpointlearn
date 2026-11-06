@@ -1099,6 +1099,26 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   </div>
 </div>
 
+<!-- ===== Reactivation: Client Service records existing CHN/CSCS ===== -->
+<div class="modal-overlay" id="reactivationApproveModalOverlay" onclick="if(event.target===this) closeReactivationApproveModal()">
+  <div class="modal" role="dialog" aria-modal="true">
+    <button class="modal-close" onclick="closeReactivationApproveModal()" aria-label="Close">✕</button>
+    <div class="eyebrow">Reactivation</div>
+    <h3>Existing account details</h3>
+    <p class="sub">This applicant is reactivating an existing BGL account. Enter their existing CHN and CSCS Account Number before sending the application to Compliance.</p>
+    <div class="field">
+      <label for="reactivation-chn">Clearing House Number (CHN)</label>
+      <input type="text" id="reactivation-chn">
+    </div>
+    <div class="field">
+      <label for="reactivation-csc">CSCS Account Number</label>
+      <input type="text" id="reactivation-csc">
+    </div>
+    <button class="btn btn-primary" style="width:100%; padding:13px;" onclick="confirmReactivationApprove()">Approve → send to Compliance</button>
+    <div class="form-status" id="reactivation-modal-status"></div>
+  </div>
+</div>
+
 <!-- ===== Reject Application modal ===== -->
 <div class="modal-overlay" id="rejectModalOverlay" onclick="if(event.target===this) closeRejectModal()">
   <div class="modal" role="dialog" aria-modal="true">
@@ -1714,6 +1734,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   let currentApplication = null;
   let currentApplicationsList = []; // for CSV export — whatever's currently filtered/displayed
   let currentMatchedCustomer = null; // existing_bgl_customers row matched to the currently viewed application, if any
+  let currentViewedApp = null; // full row of the application open in the detail view (currentApplication gets narrowed to {id} by the modals)
 
   async function loadApplicationsSummary(){
     // Deliberately ignores the status/search filters below — these
@@ -1835,6 +1856,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     }
 
     currentApplication = app;
+    currentViewedApp = app;
 
     // Set server-side at submission time (see findExistingCustomerId in
     // submit-application.js) whenever the applicant's email matched
@@ -2069,8 +2091,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <div class="detail-row"><span>Referred by</span><span>${escapeHtml(app.referred_by || '—')} ${(isSuperAdmin() || currentAdminRole === 'compliance') ? `<button class="link-btn" style="font-size:11px;" onclick="openEditReferredByModal('${app.id}', '${escapeHtml(app.referred_by || '')}')">Edit</button>` : ''}</span></div>
         ${app.referred_by ? detailRow("Referrer's email", referrerEmail) : ''}
         ${detailRow('Submitted', new Date(app.submitted_at).toLocaleString())}
-        ${app.chn ? detailRow('CHN', app.chn) : ''}
-        ${app.csc_account_number ? detailRow('CSCS Account Number', app.csc_account_number) : ''}
+        ${app.chn ? detailRow(app.status === 'opened' ? 'CHN' : 'CHN (existing account)', app.chn) : ''}
+        ${app.csc_account_number ? detailRow(app.status === 'opened' ? 'CSCS Account Number' : 'CSCS Account Number (existing account)', app.csc_account_number) : ''}
         ${app.needs_update_count ? detailRow('Update requests sent', `${app.needs_update_count} of ${MAX_NEEDS_UPDATE_REQUESTS}`) : ''}
         ${app.status === 'needs_update' && app.needs_update_note ? detailRow('Update requested', app.needs_update_note) : ''}
         ${app.status === 'needs_update' && app.resume_token ? `
@@ -2129,8 +2151,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       const roleLabel = ADMIN_ROLE_LABELS[requiredRole];
       buttons += `<p style="font-size:13px; color:rgba(22,36,26,0.55); margin:0;">Awaiting a ${roleLabel} reviewer${currentAdminRole ? '' : ' — your admin account has no role assigned yet'}.</p>`;
     } else if(app.status === 'submitted'){
+      const approveAction = app.application_type === 'reactivation'
+        ? `openReactivationApproveModal('${app.id}')`
+        : `advanceToClientServiceReview('${app.id}')`;
       buttons += `
-        <button class="btn btn-primary" onclick="advanceToClientServiceReview('${app.id}')">Approve</button>
+        <button class="btn btn-primary" onclick="${approveAction}">Approve</button>
         ${requestUpdateButtonHtml(app)}
         <button class="btn btn-ghost" style="color:#b3452f; border-color:#b3452f;" onclick="openRejectModal('${app.id}')">Reject</button>
       `;
@@ -2275,6 +2300,36 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     }
   };
 
+  window.openReactivationApproveModal = function(id){
+    currentApplication = { id };
+    const app = currentViewedApp && currentViewedApp.id === id ? currentViewedApp : null;
+    document.getElementById('reactivation-chn').value = (app && app.chn) || (currentMatchedCustomer && currentMatchedCustomer.chn) || '';
+    document.getElementById('reactivation-csc').value = (app && app.csc_account_number) || (currentMatchedCustomer && currentMatchedCustomer.cscs) || '';
+    document.getElementById('reactivation-modal-status').textContent = '';
+    document.getElementById('reactivationApproveModalOverlay').classList.add('open');
+  };
+  window.closeReactivationApproveModal = function(){
+    document.getElementById('reactivationApproveModalOverlay').classList.remove('open');
+  };
+  window.confirmReactivationApprove = async function(){
+    const chn = document.getElementById('reactivation-chn').value.trim();
+    const cscAccountNumber = document.getElementById('reactivation-csc').value.trim();
+    const statusEl = document.getElementById('reactivation-modal-status');
+    if(!chn || !cscAccountNumber){
+      statusEl.textContent = 'CHN and CSCS Account Number are both required.';
+      statusEl.className = 'form-status error';
+      return;
+    }
+    try{
+      await callStatusUpdate({ applicationId: currentApplication.id, newStatus: 'under_review_client_service', chn, cscAccountNumber });
+      closeReactivationApproveModal();
+      await viewApplication(currentApplication.id);
+    } catch(err){
+      statusEl.textContent = err.message;
+      statusEl.className = 'form-status error';
+    }
+  };
+
   window.advanceToCompliance = async function(id){
     try{
       await callStatusUpdate({ applicationId: id, newStatus: 'under_review_compliance' });
@@ -2295,13 +2350,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
   window.openOpenedModal = function(id){
     currentApplication = { id };
-    // Pre-fill from the matched existing_bgl_customers record when this
-    // application was flagged as a reactivation match — currentMatchedCustomer
-    // is set by viewApplication() for whichever application is currently
-    // open, which is always this one (the button only exists on the
-    // detail view). Admin can still edit/clear these before confirming.
-    document.getElementById('opened-chn').value = (currentMatchedCustomer && currentMatchedCustomer.chn) || '';
-    document.getElementById('opened-csc').value = (currentMatchedCustomer && currentMatchedCustomer.cscs) || '';
+    // Pre-fill from what Client Service recorded for a reactivation, else
+    // from the matched existing_bgl_customers record. Admin can still
+    // edit/clear these before confirming.
+    const app = currentViewedApp && currentViewedApp.id === id ? currentViewedApp : null;
+    document.getElementById('opened-chn').value = (app && app.chn) || (currentMatchedCustomer && currentMatchedCustomer.chn) || '';
+    document.getElementById('opened-csc').value = (app && app.csc_account_number) || (currentMatchedCustomer && currentMatchedCustomer.cscs) || '';
     document.getElementById('opened-note').value = '';
     document.getElementById('opened-modal-status').textContent = '';
     document.getElementById('openedModalOverlay').classList.add('open');

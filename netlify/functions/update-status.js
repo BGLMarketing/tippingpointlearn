@@ -304,10 +304,23 @@ async function handleApplicationStatus(adminEmail, body) {
       return jsonResponse(409, { error: 'This application has already been sent back for updates twice — approve or reject it instead.' });
     }
 
+    // A reactivation reuses the customer's existing CHN/CSCS, so Client
+    // Service records them when approving, before Compliance reviews.
+    const isReactivationHandoff = newStatus === 'under_review_client_service' && appRow.application_type === 'reactivation';
+    const handoffChn = (chn || '').trim();
+    const handoffCsc = (cscAccountNumber || '').trim();
+    if (isReactivationHandoff && (!handoffChn || !handoffCsc)) {
+      return jsonResponse(400, { error: 'This is a reactivation — enter the existing CHN and CSCS Account Number before sending it to Compliance.' });
+    }
+
     const update = { status: newStatus };
     if (newStatus === 'under_review_client_service') {
       update.review_started_at = new Date().toISOString();
       update.reviewed_by = adminEmail;
+      if (isReactivationHandoff) {
+        update.chn = handoffChn;
+        update.csc_account_number = handoffCsc;
+      }
     } else if (newStatus === 'under_review_compliance') {
       // Second review stage — reviewed_by is overwritten to whoever
       // advanced it here; review_started_at is left as the original
@@ -358,7 +371,11 @@ async function handleApplicationStatus(adminEmail, body) {
       application_id: applicationId,
       status: newStatus,
       changed_by: adminEmail,
-      reason: newStatus === 'rejected' ? rejectionReason : (adminNote || null)
+      reason: newStatus === 'rejected'
+        ? rejectionReason
+        : isReactivationHandoff
+          ? `Reactivation — existing CHN ${handoffChn}, CSCS ${handoffCsc} recorded`
+          : (adminNote || null)
     });
     if (historyErr) console.error('application_status_history insert failed:', historyErr);
 

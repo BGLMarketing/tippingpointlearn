@@ -137,7 +137,12 @@ page like `/faq` or `/waitlist`.
   from `existing_bgl_customers`) and the "Mark as opened" modal
   pre-fills CHN/CSCS Account Number from that matched record — admin
   still confirms/edits before saving, this is never applied
-  automatically. Implemented as a `{checkEmail: '...'}` dispatch on
+  automatically. For a **Reactivation**, Client Service must enter the
+  existing CHN and CSCS Account Number when approving at `submitted`
+  (enforced server-side in `update-status.js`), so Compliance reviews
+  with them already on the application; "Mark as opened" then
+  pre-fills from those saved values. `/track-application` only ever
+  returns the CHN once the application is `opened`. Implemented as a `{checkEmail: '...'}` dispatch on
   `submit-application.js` rather than a new endpoint, to stay under
   Vercel Hobby's serverless function cap (already broke production
   twice this session at just 10-11 functions). The check "fails open"
