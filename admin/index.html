@@ -1272,6 +1272,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <script src="/assets/js/supabase-config.js"></script>
 
 <script>
+  // Read the auth redirect params before supabase-js consumes and clears them.
+  const authLinkParams = new URLSearchParams(window.location.hash.slice(1) + '&' + window.location.search.slice(1));
+  let inPasswordRecovery = authLinkParams.get('type') === 'recovery';
+  let pendingAuthLinkError = authLinkParams.get('error_description') || authLinkParams.get('error') || null;
+
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const SITE_URL = 'https://tippingpoint.bglafrica.com';
 
@@ -1377,6 +1382,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
     statusEl.textContent = 'Password updated. Signing you in…';
     statusEl.className = 'form-status success';
+    inPasswordRecovery = false;
     setTimeout(() => {
       resetPasswordView.hidden = true;
       checkAuth();
@@ -1597,8 +1603,31 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     currentAdminRole = data ? data.role : null;
   }
 
+  function showPasswordRecoveryView(){
+    loginView.hidden = true;
+    forgotView.hidden = true;
+    dashboardView.hidden = true;
+    resetPasswordView.hidden = false;
+  }
+
   async function checkAuth(){
     const { data: { session } } = await sb.auth.getSession();
+    // A recovery link signs the user in; don't let that skip the
+    // "set a new password" step.
+    if(inPasswordRecovery && session){
+      showPasswordRecoveryView();
+      return;
+    }
+    if(!session && pendingAuthLinkError){
+      loginView.hidden = true;
+      forgotView.hidden = false;
+      const statusEl = document.getElementById('forgot-status');
+      statusEl.textContent = 'That reset link has expired or was already used (email security scanners sometimes open links before you do). Request a new link below and open it straight away.';
+      statusEl.className = 'form-status error';
+      pendingAuthLinkError = null;
+      history.replaceState(null, '', window.location.pathname);
+      return;
+    }
     if(session){
       loginView.hidden = true;
       forgotView.hidden = true;
@@ -1609,7 +1638,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       document.getElementById('tab-admins').style.display = isSuperAdmin() ? '' : 'none';
       await loadArticles();
     } else {
-      loginView.hidden = false;
+      loginView.hidden = !forgotView.hidden;
       dashboardView.hidden = true;
       currentAdminEmail = null;
       currentAdminRole = null;
@@ -1622,10 +1651,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     // that as "signed in" and show the dashboard directly, and force
     // setting a new password first instead.
     if(event === 'PASSWORD_RECOVERY'){
-      loginView.hidden = true;
-      forgotView.hidden = true;
-      dashboardView.hidden = true;
-      resetPasswordView.hidden = false;
+      inPasswordRecovery = true;
+      showPasswordRecoveryView();
       return;
     }
     checkAuth();
