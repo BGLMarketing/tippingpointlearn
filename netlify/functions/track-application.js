@@ -47,7 +47,7 @@ exports.handler = async (event) => {
       status: data.status,
       submittedAt: data.submitted_at,
       openedAt: data.opened_at,
-      chn: data.chn,
+      chn: data.status === 'opened' ? data.chn : null,
       rejectedAt: data.rejected_at,
       rejectionReason: data.rejection_reason,
       // The resume TOKEN is deliberately never returned here — it only
