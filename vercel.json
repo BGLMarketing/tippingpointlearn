@@ -3,5 +3,9 @@
   "rewrites": [
     { "source": "/learn/:slug", "destination": "/learn/article" },
     { "source": "/interest/:slug", "destination": "/interest/index" }
+  ],
+  "redirects": [
+    { "source": "/dangote-ipo", "destination": "/", "permanent": false },
+    { "source": "/dangote-ipo/:path*", "destination": "/", "permanent": false }
   ]
 }

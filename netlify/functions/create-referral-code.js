@@ -55,8 +55,7 @@ exports.handler = async (event) => {
 
     return jsonResponse(200, {
       code,
-      shareUrl: `${SITE_URL}/open-account?ref=${encodeURIComponent(code)}`,
-      ipoShareUrl: `${SITE_URL}/dangote-ipo/subscribe?ref=${encodeURIComponent(code)}`
+      shareUrl: `${SITE_URL}/open-account?ref=${encodeURIComponent(code)}`
     });
   } catch (err) {
     console.error('create-referral-code error:', err);

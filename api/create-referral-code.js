@@ -55,8 +55,7 @@ module.exports = async (req, res) => {
 
     return res.status(200).json({
       code,
-      shareUrl: `${SITE_URL}/open-account?ref=${encodeURIComponent(code)}`,
-      ipoShareUrl: `${SITE_URL}/dangote-ipo/subscribe?ref=${encodeURIComponent(code)}`
+      shareUrl: `${SITE_URL}/open-account?ref=${encodeURIComponent(code)}`
     });
   } catch (err) {
     console.error('create-referral-code error:', err);
