@@ -413,7 +413,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <a href="/" class="nav-link">Home</a>
       <a href="/faq" class="nav-link">FAQ</a>
       <a href="/learn" class="nav-link">Learn</a>
-      <a href="/dangote-ipo" class="nav-link">Dangote IPO</a>
       <span class="nav-link" style="color:var(--gold); font-weight:700; opacity:1; cursor:default;">Open BGL Account</span>
       <a href="https://whatsapp.com/channel/0029VbDBs7b2P59tpMSe8D2L" target="_blank" rel="noopener" class="btn btn-ghost">Join the community</a>
       <button class="btn btn-primary" onclick="openWaitlist()">Join the waitlist</button>
@@ -650,14 +649,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
     <div id="referSuccessView" style="display:none; text-align:center;">
       <div class="eyebrow">You're set</div>
-      <h3>Your referral links are ready</h3>
-      <p class="sub">Share whichever fits — each one is automatically credited to you.</p>
+      <h3>Your referral link is ready</h3>
+      <p class="sub">Share it — every account opened through it is automatically credited to you.</p>
       <p style="font-size:12px; color:rgba(22,36,26,0.5); margin:16px 0 4px; text-align:left;">BGL account opening</p>
       <div style="background:var(--paper); border:1px solid var(--line-dark); border-radius:10px; padding:12px; font-family:'IBM Plex Mono', monospace; font-size:13px; word-break:break-all; margin-bottom:10px;" id="referLinkDisplay"></div>
-      <button class="btn btn-ghost" style="width:100%; padding:11px; margin-bottom:14px;" onclick="copyReferLink(event)">Copy account link</button>
-      <p style="font-size:12px; color:rgba(22,36,26,0.5); margin:0 0 4px; text-align:left;">Dangote IPO subscription</p>
-      <div style="background:var(--paper); border:1px solid var(--line-dark); border-radius:10px; padding:12px; font-family:'IBM Plex Mono', monospace; font-size:13px; word-break:break-all; margin-bottom:10px;" id="referIpoLinkDisplay"></div>
-      <button class="btn btn-ghost" style="width:100%; padding:11px;" onclick="copyReferIpoLink(event)">Copy IPO link</button>
+      <button class="btn btn-ghost" style="width:100%; padding:11px;" onclick="copyReferLink(event)">Copy account link</button>
       <p style="font-size:12.5px; color:rgba(22,36,26,0.55); margin-top:14px;">Your code: <strong id="referCodeDisplay"></strong> — check its status anytime at <a href="/referral-status" style="color:var(--green-deep);">/referral-status</a>.</p>
     </div>
   </div>
@@ -966,7 +962,6 @@ async function submitReferral(){
     document.getElementById('referFormView').style.display = 'none';
     document.getElementById('referSuccessView').style.display = 'block';
     document.getElementById('referLinkDisplay').textContent = result.shareUrl;
-    document.getElementById('referIpoLinkDisplay').textContent = result.ipoShareUrl;
     document.getElementById('referCodeDisplay').textContent = result.code;
   } catch(err){
     errEl.textContent = 'Something went wrong. Please try again.';
@@ -979,18 +974,6 @@ async function submitReferral(){
 
 function copyReferLink(evt){
   const text = document.getElementById('referLinkDisplay').textContent;
-  const btn = evt.currentTarget;
-  navigator.clipboard.writeText(text).then(()=>{
-    const original = btn.textContent;
-    btn.textContent = 'Copied!';
-    setTimeout(()=>{ btn.textContent = original; }, 1500);
-  }).catch(()=>{
-    alert('Could not copy automatically — please select and copy the link manually.');
-  });
-}
-
-function copyReferIpoLink(evt){
-  const text = document.getElementById('referIpoLinkDisplay').textContent;
   const btn = evt.currentTarget;
   navigator.clipboard.writeText(text).then(()=>{
     const original = btn.textContent;

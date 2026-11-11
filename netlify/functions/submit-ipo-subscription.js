@@ -14,6 +14,9 @@ const { sendIpoSubmissionReceivedEmail, sendIpoInternalAlert } = require('./util
 // the offer is real. Keep in sync with the two frontend copies of
 // this constant if the date ever changes.
 const IPO_OFFER_OPENS_AT = new Date('2026-09-14T00:00:00+01:00');
+// End of the extended subscription window (27 October 2026, WAT). The
+// public pages are gone; this stops direct API submissions too.
+const IPO_OFFER_CLOSES_AT = new Date('2026-10-28T00:00:00+01:00');
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -22,6 +25,10 @@ exports.handler = async (event) => {
 
   if (new Date() < IPO_OFFER_OPENS_AT) {
     return jsonResponse(403, { error: 'The Dangote Refinery IPO is not open for subscription yet. It opens 14 September 2026.' });
+  }
+
+  if (new Date() >= IPO_OFFER_CLOSES_AT) {
+    return jsonResponse(410, { error: 'The Dangote Refinery IPO has closed and is no longer accepting subscriptions.' });
   }
 
   let body;

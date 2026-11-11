@@ -4,6 +4,11 @@
 # existing links that use the old ?slug= query string format.
 /learn/:slug  /learn/article.html  200
 
+# The Dangote Refinery IPO closed in October 2026 and its pages were
+# removed; send old links (ads, shared referral links) to the homepage.
+/dangote-ipo     /  302
+/dangote-ipo/*   /  302
+
 # Platform-neutral function paths. The frontend calls /api/* (matching
 # Vercel's native convention) rather than /.netlify/functions/* directly,
 # so the same frontend code works unmodified on whichever platform is

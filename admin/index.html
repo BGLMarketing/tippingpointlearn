@@ -693,7 +693,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <a href="/" class="nav-link">Home</a>
       <a href="/faq" class="nav-link">FAQ</a>
       <a href="/learn" class="nav-link">Learn</a>
-      <a href="/dangote-ipo" class="nav-link" style="color:var(--gold); font-weight:700;">Dangote IPO</a>
       <a href="https://whatsapp.com/channel/0029VbDBs7b2P59tpMSe8D2L" target="_blank" rel="noopener" class="btn btn-ghost">Join the community</a>
       <button class="btn btn-primary" onclick="openWaitlist()">Join the waitlist</button>
     </div>
@@ -2978,8 +2977,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
   function copyReferralKit(evt, code){
     const accountLink = `${SITE_URL}/open-account?ref=${encodeURIComponent(code)}`;
-    const ipoLink = `${SITE_URL}/dangote-ipo/subscribe?ref=${encodeURIComponent(code)}`;
-    const text = `Referral code: ${code}\nOpen a BGL account: ${accountLink}\nSubscribe to the Dangote IPO: ${ipoLink}`;
+    const text = `Referral code: ${code}\nOpen a BGL account: ${accountLink}`;
     const btn = evt.currentTarget;
     navigator.clipboard.writeText(text).then(() => {
       const original = btn.textContent;

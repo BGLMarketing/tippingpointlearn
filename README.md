@@ -8,8 +8,8 @@ Static site for Tipping Point (BGL Securities' digital investment platform), cur
 /                 → main landing page (waitlist, brand overview)
 /faq              → general FAQ
 /waitlist         → standalone waitlist form (shareable link, e.g. for ads/social bio)
-/dangote-ipo      → Dangote Refinery IPO campaign page (FAQ, 3-channel steps, waitlist)
-/dangote-ipo/subscribe → IPO subscription wizard — see "Dangote IPO subscription" below
+/dangote-ipo, /dangote-ipo/subscribe → removed (IPO closed); redirect to / — see
+                    "Dangote IPO subscription" below
 /learn            → Learn hub (placeholder — see "Learn page" below)
 /open-account     → BGL account opening wizard (Individual/Joint/Corporate) — see
                     "Account opening" below
@@ -483,6 +483,17 @@ account referrals and their IPO subscription referrals together.
   version.
 
 ## Dangote IPO subscription
+
+> **Closed.** The offer closed 27 October 2026 (after a 14-day extension)
+> and both public pages were removed in November 2026 — `/dangote-ipo` and
+> `/dangote-ipo/*` redirect to `/` (`_redirects` and `vercel.json`), the
+> nav link and the IPO referral link are gone, and
+> `submit-ipo-subscription.js` rejects new submissions with a 410 after
+> `IPO_OFFER_CLOSES_AT`. The admin "Dangote IPO" tab, the status pipeline
+> (`update-status.js`), and the IPO counts on `/referral-status` and in
+> admin commissions are kept so existing subscriptions can still be
+> processed through allotment. The pages are in git history if needed for
+> a future offer. The rest of this section describes how it worked.
 
 `/dangote-ipo` is the public campaign page (offer terms, FAQ, waitlist).
 The offer opened 14 September 2026, and the page links to
